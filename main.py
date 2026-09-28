@@ -16,7 +16,7 @@ load_dotenv()
 
 # 서버가 재시작될 때 Firebase가 중복 실행되는 것을 방지합니다.
 if not firebase_admin._apps:
-    cred = credentials.Certificate(os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON"))
+    cred = credentials.Certificate("serviceAccountKey.json")
     firebase_admin.initialize_app(cred)
 db = firestore.client()
 
