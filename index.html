@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>환율 분석 AI 비서</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 800px; display: flex; gap: 20px; flex-direction: column; }
+        
+        /* 요약 데이터 영역 */
+        .summary-box { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .summary-box h2 { margin-top: 0; font-size: 1.2rem; color: #333; }
+        #summary-content { white-space: pre-wrap; font-size: 0.9rem; color: #555; background: #f9f9f9; padding: 10px; border-radius: 5px; }
+        
+        /* 채팅 영역 */
+        .chat-box { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; height: 500px; }
+        .chat-history { flex: 1; overflow-y: auto; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px; padding-right: 10px; }
+        
+        .message { max-width: 80%; padding: 10px 15px; border-radius: 20px; line-height: 1.4; font-size: 0.95rem; }
+        .message.user { align-self: flex-end; background-color: #007bff; color: white; border-bottom-right-radius: 5px; }
+        .message.ai { align-self: flex-start; background-color: #e9ecef; color: #333; border-bottom-left-radius: 5px; }
+        
+        /* 입력창 영역 */
+        .input-area { display: flex; gap: 10px; }
+        .input-area input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 5px; outline: none; font-size: 1rem; }
+        .input-area button { padding: 12px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .input-area button:hover { background-color: #218838; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- 환율 요약 데이터 표시 영역 -->
+        <div class="summary-box">
+            <h2>📊 현재 환율 요약 데이터</h2>
+            <div id="summary-content">데이터를 불러오는 중입니다...</div>
+        </div>
+
+        <!-- AI 채팅 영역 -->
+        <div class="chat-box">
+            <div class="chat-history" id="chat-history">
+                <div class="message ai">안녕하세요! 환율 분석 AI 비서입니다. 무엇을 도와드릴까요?</div>
+            </div>
+            <div class="input-area">
+                <input type="text" id="chat-input" placeholder="엔화 환율 평균을 알려줘..." onkeypress="handleKeyPress(event)">
+                <button onclick="sendMessage()">전송</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = "http://127.0.0.1:8000/api";
+        let currentConversationId = null; // 대화 이어가기를 위한 ID 저장
+
+        // 1. 페이지 로드 시 환율 요약 데이터 가져오기 (개선된 버전)
+        async function fetchSummary() {
+            try {
+                // API 주소가 /api/summary 인지 /api/data/summary 인지 확인이 필요할 수 있습니다.
+                const response = await fetch(`${API_BASE_URL}/data/summary`);
+                
+                if (!response.ok) {
+                    throw new Error(`서버 응답 오류: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // 백엔드에서 반환하는 구조가 {"summary": {...}} 인지 데이터 자체가 바로 오는지 안전하게 체크
+                const summary = data.summary ? data.summary : data;
+
+                // 숫자가 문자열로 넘어올 경우를 대비한 안전한 소수점 처리 함수
+                const formatNum = (num) => {
+                    const parsed = parseFloat(num);
+                    return isNaN(parsed) ? num : parsed.toFixed(2);
+                };
+                
+                const summaryText = `[USD] 평균: ${formatNum(summary.USD['평균 환율'])} | 최저: ${summary.USD['최저 환율']} | 최고: ${summary.USD['최고 환율']}
+[JPY] 평균: ${formatNum(summary.JPY['평균 환율'])} | 최저: ${summary.JPY['최저 환율']} | 최고: ${summary.JPY['최고 환율']}
+[EUR] 평균: ${formatNum(summary.EUR['평균 환율'])} | 최저: ${summary.EUR['최저 환율']} | 최고: ${summary.EUR['최고 환율']}`;
+                
+                document.getElementById('summary-content').innerText = summaryText;
+            } catch (error) {
+                console.error("요약 데이터 로드 실패:", error);
+                document.getElementById('summary-content').innerText = "데이터를 불러오는데 실패했습니다. (키보드 F12를 눌러 Console 탭의 에러를 확인해 주세요)";
+            }
+        }
+
+        // 2. 채팅 메시지 화면에 추가하는 함수
+        function appendMessage(sender, text) {
+            const chatHistory = document.getElementById('chat-history');
+            const msgDiv = document.createElement('div');
+            msgDiv.classList.add('message', sender);
+            msgDiv.innerText = text;
+            chatHistory.appendChild(msgDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight; // 스크롤 맨 아래로 이동
+        }
+
+        // 3. 백엔드로 메시지 전송 및 AI 답변 받기
+        async function sendMessage() {
+            const inputField = document.getElementById('chat-input');
+            const message = inputField.value.trim();
+            if (!message) return;
+
+            // 내 메시지 화면에 표시
+            appendMessage('user', message);
+            inputField.value = '';
+
+            try {
+                const payload = { message: message };
+                if (currentConversationId) {
+                    payload.conversation_id = currentConversationId; // 기존 대화 ID 전달
+                }
+
+                const response = await fetch(`${API_BASE_URL}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                
+                if (data.conversation_id) {
+                    currentConversationId = data.conversation_id; // 백엔드에서 준 새 ID 저장
+                }
+                
+                // AI 답변 화면에 표시
+                appendMessage('ai', data.reply || "답변을 가져오지 못했습니다.");
+            } catch (error) {
+                appendMessage('ai', "서버 통신 중 에러가 발생했습니다.");
+            }
+        }
+
+        // 엔터키 입력 처리
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') sendMessage();
+        }
+
+        // 실행
+        fetchSummary();
+    </script>
+
+</body>
+</html>
