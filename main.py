@@ -194,11 +194,12 @@ def chat_with_ai(req: ChatRequest):
     # 4. Anthropic API 호출 설정
     url = "https://copa.codyssey.kr/v1/messages"
     headers = {
-        # os.getenv(...) 부분을 지우고, 발급받으신 진짜 키를 따옴표("") 안에 직접 붙여넣으세요.
-        "x-api-key": "sk-cody-live-UgzQOsmH3zyv5tkJF9N3_9Q-ErwZ4uPnT-CKrsqTD58", 
+        # 따옴표로 감싸진 긴 키를 지우고 아래처럼 바꿉니다.
+        "x-api-key": os.getenv("ANTHROPIC_API_KEY"),
         "anthropic-version": "2023-06-01",
         "Content-Type": "application/json"
     }
+    
     payload = {
         "model": "claude-sonnet-4",
         "max_tokens": 1024,
