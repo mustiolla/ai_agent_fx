@@ -533,16 +533,19 @@ def get_market_briefing():
     """
 
     prompt = f"""당신은 외환(FX) 시장 수석 애널리스트입니다.
-아래의 오늘 최신 환율 및 최근 7일간의 변동 지표를 바탕으로, 투자자와 해외 환전 이용자를 위한 '오늘의 외환 시장 데일리 브리핑'을 작성하세요.
+아래의 오늘 최신 환율 및 최근 7일간의 변동 지표를 바탕으로, 투자자와 해외 환전 이용자를 위한 '오늘의 외환 시장 데일리 모닝 브리핑'을 작성하세요.
 
 [최신 외환 지표]
 {market_context}
 
 [작성 지침]
-1. 달러, 유로, 엔화의 전일 대비 등락 흐름과 7일 평균 대비 현재 수준을 종합 분석하세요.
-2. 실용적인 환전 및 매수/매도 팁을 곁들여 2~3문장(약 120~180자 내외)으로 작성하세요.
-3. 신뢰감 있고 친절한 전문 금융 비서 어조로 작성하며 적절한 이모지를 사용하세요.
-4. 인사말이나 불필요한 설명 없이 바로 브리핑 본문만 출력하세요.
+1. 인사말이나 겉치레 없이 바로 '# 📊 오늘의 외환 시장 데일리 브리핑' 헤더로 시작하세요.
+2. 먼저 전체 외환 시장의 흐름과 기조를 1~2문장으로 명쾌하게 총평하세요.
+3. 달러(USD), 유로(EUR), 엔화(JPY) 3대 통화 각각에 대해:
+   - 전일비 등락 및 7일 평균 대비 현재 수준 분석 (1~2문장)
+   - 실전 환전/매수/매도 타이밍 팁 (1문장)
+   형태로 글머리 기호(Bulleted List)와 이모지를 활용해 가독성 높게 작성하세요.
+4. 긴 마크다운 표(Table)는 지양하고 깔끔한 리스트 형식으로 작성하여 문장이 중간에 끊기지 않고 끝까지 완성되도록 작성하세요.
 """
 
     api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -554,12 +557,12 @@ def get_market_briefing():
     }
     payload = {
         "model": "claude-sonnet-4",
-        "max_tokens": 300,
+        "max_tokens": 1500,
         "messages": [{"role": "user", "content": prompt}],
     }
 
     try:
-        res = requests.post(url, headers=headers, json=payload, timeout=20)
+        res = requests.post(url, headers=headers, json=payload, timeout=25)
         res_data = res.json()
         briefing_text = res_data["content"][0]["text"].strip()
     except Exception as e:

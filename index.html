@@ -357,28 +357,52 @@
             border-radius: 10px;
         }
 
-        /* 최신 환율 & 등락률 메인 섹션 */
+        /* 최신 환율 & 등락률 메인 섹션 (환율값 밑에 등락값 배치 & 날짜 한줄 정돈) */
         .latest-rate-section {
             background: var(--bg);
-            border-radius: 8px;
-            padding: 12px 14px;
+            border-radius: 10px;
+            padding: 14px 16px;
             margin-bottom: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .latest-rate-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            font-size: 0.82rem;
+            color: var(--text-sub);
+            white-space: nowrap;
         }
         .latest-rate-label {
-            font-size: 0.8rem;
+            font-size: 0.82rem;
             color: var(--text-sub);
+            font-weight: 600;
+        }
+        .latest-rate-date {
+            font-size: 0.78rem;
+            color: var(--text-sub);
+            background: rgba(148, 163, 184, 0.15);
+            padding: 2px 7px;
+            border-radius: 6px;
             font-weight: 500;
+            letter-spacing: -0.2px;
         }
         .latest-rate-val {
-            font-size: 1.35rem;
+            font-size: 1.45rem;
             font-weight: 800;
             color: var(--text-main);
             display: flex;
             align-items: baseline;
-            gap: 3px;
+            gap: 4px;
+            line-height: 1.25;
+            margin-top: 2px;
+        }
+        .latest-rate-delta {
+            display: flex;
+            align-items: center;
+            margin-top: 4px;
         }
         .delta-badge {
             display: inline-flex;
@@ -1378,16 +1402,19 @@
                                 <span class="count">${countVal}</span>
                             </div>
 
-                            <!-- 최신 환율 & 전일 대비 등락 뱃지 (추천 기능 1번) -->
+                            <!-- 최신 환율 & 전일 대비 등락 뱃지 (환율값 밑으로 등락값 배치 & 날짜 한줄 보장) -->
                             <div class="latest-rate-section">
-                                <div>
-                                    <div class="latest-rate-label">최신 환율 (${item['최신 기준일'] || '오늘'})</div>
-                                    <div class="latest-rate-val">
-                                        ${formatNum(latestVal)}
-                                        <span style="font-size:0.85rem; font-weight:600; color:var(--text-sub);">${c.unit}</span>
-                                    </div>
+                                <div class="latest-rate-header">
+                                    <span class="latest-rate-label">최신 환율</span>
+                                    <span class="latest-rate-date">기준일: ${item['최신 기준일'] || '오늘'}</span>
                                 </div>
-                                <div>${deltaBadgeHtml}</div>
+                                <div class="latest-rate-val">
+                                    ${formatNum(latestVal)}
+                                    <span style="font-size:0.85rem; font-weight:600; color:var(--text-sub);">${c.unit}</span>
+                                </div>
+                                <div class="latest-rate-delta">
+                                    ${deltaBadgeHtml}
+                                </div>
                             </div>
 
                             <div class="stat-row">
