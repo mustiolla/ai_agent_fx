@@ -4,16 +4,24 @@ import time
 import math
 import io
 import csv
+import re
+import html
+import logging
 import requests
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from firebase_config import get_firestore_db
+
+# 로깅 설정 (운영 모니터링 및 감사 추적)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logger = logging.getLogger("fx_assistant")
 
 # ==============================================================================
 # [Layer 1: Data Access / Persistence Layer] - In-memory Cache & Database Client
@@ -38,21 +46,49 @@ _briefing_cache: Dict[str, Any] = {
 
 
 def get_cached_rates() -> List[Dict[str, Any]]:
-    """Firestore 환율 데이터를 5분간 캐싱하여 반복 읽기 비용을 방지합니다."""
+    """Firestore 환율 데이터를 5분간 캐싱하여 반복 읽기 비용을 방지하며, 쿼터 초과 시 로컬 백업으로 자동 폴백합니다."""
     now = time.time()
     if _rates_cache["data"] is not None and (now - _rates_cache["timestamp"]) < _rates_cache["ttl"]:
         return _rates_cache["data"]
 
-    docs = db.collection("data").stream()
-    data_list = []
-    for doc in docs:
-        item = doc.to_dict()
-        item["id"] = doc.id
-        data_list.append(item)
+    try:
+        docs = db.collection("data").stream()
+        data_list = []
+        for doc in docs:
+            item = doc.to_dict()
+            item["id"] = doc.id
+            data_list.append(item)
 
-    _rates_cache["data"] = data_list
-    _rates_cache["timestamp"] = now
-    return data_list
+        if data_list:
+            _rates_cache["data"] = data_list
+            _rates_cache["timestamp"] = now
+            try:
+                backup_path = os.path.join(os.path.dirname(__file__), "data_backup.json")
+                with open(backup_path, "w", encoding="utf-8") as f:
+                    json.dump(data_list, f, ensure_ascii=False)
+            except Exception:
+                pass
+            return data_list
+    except Exception as e:
+        logger.warning(f"Firestore 환율 조회 실패(쿼터 초과 또는 네트워크 오류: {e}). 로컬 백업 데이터로 폴백합니다.")
+
+    # Firestore 오류 시 기존 메모리 캐시 또는 data_backup.json 활용
+    if _rates_cache["data"] is not None and len(_rates_cache["data"]) > 0:
+        return _rates_cache["data"]
+
+    backup_path = os.path.join(os.path.dirname(__file__), "data_backup.json")
+    if os.path.exists(backup_path):
+        try:
+            with open(backup_path, "r", encoding="utf-8") as f:
+                backup_data = json.load(f)
+                _rates_cache["data"] = backup_data
+                _rates_cache["timestamp"] = now
+                logger.info(f"로컬 백업 파일(data_backup.json)에서 {len(backup_data)}건의 데이터를 성공적으로 로드했습니다.")
+                return backup_data
+        except Exception as read_err:
+            logger.error(f"로컬 백업 캐시 로드 실패: {read_err}")
+
+    return []
 
 
 def invalidate_cache():
@@ -60,6 +96,21 @@ def invalidate_cache():
     _rates_cache["data"] = None
     _rates_cache["timestamp"] = 0.0
     _briefing_cache["text"] = None
+
+
+# ==============================================================================
+# [보안 유틸리티] - 입력 필터링 및 악성 스크립트(XSS/인젝션) 차단
+# ==============================================================================
+def sanitize_input(text: str, max_len: int = 1000) -> str:
+    """악성 스크립트 및 위험 태그를 필터링하고 안전한 문자열로 이스케이프합니다."""
+    if not text:
+        return ""
+    # 위험 스크립트 태그 및 이벤트 핸들러 제거
+    cleaned = re.sub(r"<(script|iframe|object|embed|style|meta)[^>]*>.*?</\1>", "", text, flags=re.IGNORECASE | re.DOTALL)
+    cleaned = re.sub(r"javascript:|vbscript:|data:text/html", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"on\w+\s*=", "", cleaned, flags=re.IGNORECASE)
+    # 길이 제한 및 HTML 엔티티 이스케이프
+    return html.escape(cleaned.strip()[:max_len])
 
 
 # ==============================================================================
@@ -72,13 +123,34 @@ app = FastAPI(
     description="외환(USD, EUR, JPY) 시계열 통계, 표준편차 분석, 실시간 동기화, 환전 계산기, CSV/JSON 내보내기, MCP 서버 지원 및 Claude AI 금융 에이전트 서비스"
 )
 
+# CORS 설정: 환경변수 ALLOWED_ORIGINS가 지정되어 있으면 도메인 제한, 미지정시 개발용 '*' 허용
+ALLOWED_ORIGINS_ENV = os.getenv("ALLOWED_ORIGINS", "*")
+if ALLOWED_ORIGINS_ENV == "*":
+    allowed_origins = ["*"]
+else:
+    allowed_origins = [o.strip() for o in ALLOWED_ORIGINS_ENV.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# 전역 예외 처리 핸들러 (보안 친화적 에러 메시지 반환 및 로깅)
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"[GlobalError] URL: {request.url.path} | Error: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "status": "error",
+            "message": "서버 내부 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+            "path": request.url.path
+        }
+    )
 
 
 # ==============================================================================
@@ -96,19 +168,29 @@ class RateData(BaseModel):
     value: float = Field(
         ...,
         gt=0,
-        description="환율 종가 (원화 기준, 양수 값이어야 함)",
+        le=100000.0,
+        description="환율 종가 (원화 기준 양수 값, 최대 10만 이하)",
         examples=[1442.50]
     )
     currency: str = Field(
         ...,
+        pattern=r"^(USD|EUR|JPY)$",
         description="통화 코드 (USD: 미국 달러, EUR: 유로, JPY: 일본 엔화 100엔당)",
         examples=["USD"]
     )
     memo: Optional[str] = Field(
         None,
-        description="환율 데이터 관련 비고 또는 메모",
+        max_length=200,
+        description="환율 데이터 관련 비고 또는 메모 (최대 200자)",
         examples=["수동 등록 환율 종가"]
     )
+
+    @field_validator("memo")
+    @classmethod
+    def sanitize_memo(cls, v: Optional[str]) -> Optional[str]:
+        if v:
+            return sanitize_input(v, max_len=200)
+        return v
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -127,14 +209,25 @@ class ChatRequest(BaseModel):
     message: str = Field(
         ...,
         min_length=1,
-        description="사용자의 자연어 질문 또는 환전/통계 요청 메시지",
+        max_length=1000,
+        description="사용자의 자연어 질문 또는 환전/통계 요청 메시지 (최대 1,000자)",
         examples=["1000달러를 원화로 환전하면 얼마야? 우대율 80% 적용해줘"]
     )
     conversation_id: Optional[str] = Field(
         None,
-        description="기존 대화 세션 ID (새 대화 시작 시 생략 또는 null)",
+        max_length=100,
+        pattern=r"^[a-zA-Z0-9_-]*$",
+        description="기존 대화 세션 ID (영숫자, 하이픈, 언더스코어만 허용)",
         examples=["kP3j9L0sXqW2mY1z"]
     )
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, v: str) -> str:
+        cleaned = sanitize_input(v, max_len=1000)
+        if not cleaned:
+            raise ValueError("유효하지 않은 메시지입니다.")
+        return cleaned
 
     model_config = ConfigDict(
         json_schema_extra={
