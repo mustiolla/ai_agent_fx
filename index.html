@@ -3,141 +3,943 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>환율 분석 AI 비서</title>
+    <title>환율 분석 AI 비서 (기간 분석 및 차트 시각화)</title>
+    <!-- Chart.js & Marked.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
-        body { font-family: 'Malgun Gothic', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 800px; display: flex; gap: 20px; flex-direction: column; }
-        
-        /* 요약 데이터 영역 */
-        .summary-box { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .summary-box h2 { margin-top: 0; font-size: 1.2rem; color: #333; }
-        #summary-content { white-space: pre-wrap; font-size: 0.9rem; color: #555; background: #f9f9f9; padding: 10px; border-radius: 5px; }
-        
-        /* 채팅 영역 */
-        .chat-box { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; height: 500px; }
-        .chat-history { flex: 1; overflow-y: auto; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px; padding-right: 10px; }
-        
-        .message { max-width: 80%; padding: 10px 15px; border-radius: 20px; line-height: 1.4; font-size: 0.95rem; }
-        .message.user { align-self: flex-end; background-color: #007bff; color: white; border-bottom-right-radius: 5px; }
-        .message.ai { align-self: flex-start; background-color: #e9ecef; color: #333; border-bottom-left-radius: 5px; }
-        
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-sub: #64748b;
+            --border: #e2e8f0;
+            --usd-color: #0284c7;
+            --jpy-color: #e11d48;
+            --eur-color: #7c3aed;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            margin: 0;
+            padding: 24px 16px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            gap: 20px;
+            flex-direction: column;
+        }
+
+        /* 1. 상단 헤더 & 서버 설정 */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--card-bg);
+            padding: 16px 22px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-main);
+        }
+        .server-select {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--text-sub);
+        }
+        .server-select select {
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-size: 0.85rem;
+            background: white;
+            color: var(--text-main);
+            cursor: pointer;
+            outline: none;
+        }
+
+        /* 2. 환율 요약 박스 */
+        .summary-box {
+            background: var(--card-bg);
+            padding: 22px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+        .summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        .summary-header h2 {
+            margin: 0;
+            font-size: 1.2rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* 적용 기간 안내 바 */
+        .period-info-bar {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 0.9rem;
+            color: #1e40af;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .period-info-bar .highlight-badge {
+            background: #2563eb;
+            color: white;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.82rem;
+        }
+
+        /* 기간 선택 탭 버튼 */
+        .period-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .tab-btn {
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.88rem;
+            color: var(--text-sub);
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        .tab-btn:hover {
+            background: #f1f5f9;
+            color: var(--text-main);
+        }
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25);
+        }
+
+        /* 환율 카드 그리드 */
+        .rates-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 14px;
+        }
+        .rate-card {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+            background: #ffffff;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .rate-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+        }
+        .rate-card.usd { border-top: 4px solid var(--usd-color); }
+        .rate-card.jpy { border-top: 4px solid var(--jpy-color); }
+        .rate-card.eur { border-top: 4px solid var(--eur-color); }
+
+        .rate-card-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .rate-card-title span.count {
+            font-size: 0.78rem;
+            color: var(--text-sub);
+            font-weight: normal;
+            background: #f1f5f9;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .rate-card-period {
+            font-size: 0.78rem;
+            color: #475569;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 4px 8px;
+            margin-bottom: 12px;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 7px;
+            font-size: 0.9rem;
+        }
+        .stat-label { color: var(--text-sub); }
+        .stat-value { font-weight: 600; color: #0f172a; }
+        .stat-value.highlight {
+            font-size: 1.25rem;
+            color: var(--primary);
+        }
+
+        /* 3. 인터랙티브 차트 박스 */
+        .chart-box {
+            background: var(--card-bg);
+            padding: 22px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .chart-header h3 {
+            margin: 0;
+            font-size: 1.15rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .chart-hint {
+            font-size: 0.8rem;
+            color: var(--text-sub);
+        }
+        .chart-container {
+            position: relative;
+            height: 290px;
+            width: 100%;
+        }
+
+        /* 4. AI 채팅 박스 */
+        .chat-box {
+            background: var(--card-bg);
+            padding: 22px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            height: 560px;
+        }
+        .chat-box-title {
+            margin: 0 0 14px 0;
+            font-size: 1.15rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .chat-history {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            padding-right: 8px;
+        }
+
+        /* 메시지 말풍선 */
+        .message {
+            max-width: 86%;
+            padding: 14px 18px;
+            border-radius: 16px;
+            line-height: 1.6;
+            font-size: 0.94rem;
+            word-break: break-word;
+        }
+        .message.user {
+            align-self: flex-end;
+            background-color: var(--primary);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        .message.ai {
+            align-self: flex-start;
+            background-color: #f8fafc;
+            color: #1e293b;
+            border-bottom-left-radius: 4px;
+            border: 1px solid var(--border);
+        }
+
+        /* 마크다운 표 렌더링 스타일 (절대 깨지지 않도록 완전 정돈) */
+        .message.ai table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            font-size: 0.88rem;
+        }
+        .message.ai th, .message.ai td {
+            border: 1px solid #e2e8f0;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        .message.ai th {
+            background-color: #f1f5f9;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .message.ai tr:nth-child(even) {
+            background-color: #fafbfc;
+        }
+        .message.ai tr:hover {
+            background-color: #f1f5f9;
+        }
+        .message.ai p { margin: 6px 0; }
+        .message.ai ul, .message.ai ol { margin: 6px 0; padding-left: 20px; }
+        .message.ai blockquote {
+            border-left: 4px solid var(--primary);
+            background: #eff6ff;
+            margin: 8px 0;
+            padding: 8px 12px;
+            border-radius: 0 6px 6px 0;
+            color: #1e40af;
+        }
+        .message.loading {
+            color: var(--text-sub);
+            font-style: italic;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        /* 질문 추천 칩 */
+        .quick-chips {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding: 4px 0 10px 0;
+            white-space: nowrap;
+        }
+        .chip {
+            background: #eff6ff;
+            color: var(--primary);
+            border: 1px solid #bfdbfe;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .chip:hover {
+            background: var(--primary);
+            color: white;
+        }
+
         /* 입력창 영역 */
-        .input-area { display: flex; gap: 10px; }
-        .input-area input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 5px; outline: none; font-size: 1rem; }
-        .input-area button { padding: 12px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        .input-area button:hover { background-color: #218838; }
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            outline: none;
+            font-size: 0.95rem;
+            transition: border-color 0.2s;
+        }
+        .input-area input:focus {
+            border-color: var(--primary);
+        }
+        .input-area button {
+            padding: 12px 24px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: background 0.2s;
+        }
+        .input-area button:hover {
+            background-color: var(--primary-hover);
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <!-- 환율 요약 데이터 표시 영역 -->
-        <div class="summary-box">
-            <h2>📊 현재 환율 요약 데이터</h2>
-            <div id="summary-content">데이터를 불러오는 중입니다...</div>
+        <!-- 1. 헤더 -->
+        <div class="header">
+            <h1>💱 외환(FX) 분석 AI 비서</h1>
+            <div class="server-select">
+                <span>API 서버:</span>
+                <select id="api-server" onchange="handleServerChange()">
+                    <option value="https://fx-ai-backend.onrender.com/api">클라우드 (Render 실서버)</option>
+                    <option value="http://127.0.0.1:8000/api">로컬 서버 (127.0.0.1:8000)</option>
+                </select>
+            </div>
         </div>
 
-        <!-- AI 채팅 영역 -->
-        <div class="chat-box">
-            <div class="chat-history" id="chat-history">
-                <div class="message ai">안녕하세요! 환율 분석 AI 비서입니다. 무엇을 도와드릴까요?</div>
+        <!-- 2. 환율 요약 데이터 표시 영역 -->
+        <div class="summary-box">
+            <div class="summary-header">
+                <h2>📊 현재 환율 요약 데이터</h2>
+                <div class="period-tabs">
+                    <button class="tab-btn" onclick="selectPeriod('all', this)">전체 (6개월)</button>
+                    <button class="tab-btn" onclick="selectPeriod('7d', this)">최근 1주일 (7일)</button>
+                    <button class="tab-btn active" onclick="selectPeriod('30d', this)">최근 1개월 (30일)</button>
+                    <button class="tab-btn" onclick="selectPeriod('90d', this)">최근 3개월 (90일)</button>
+                </div>
             </div>
+
+            <!-- 평균 환율이 적용된 기간 표시 배너 -->
+            <div class="period-info-bar" id="period-info-bar">
+                <div>
+                    📅 <strong>평균 환율 적용 기간:</strong> 
+                    <span id="period-dates" style="font-weight: 600;">불러오는 중...</span>
+                </div>
+                <div class="highlight-badge" id="period-badge">최근 1개월 기준</div>
+            </div>
+
+            <!-- 통화별 카드 그리드 -->
+            <div class="rates-grid" id="rates-grid">
+                <div style="grid-column: 1 / -1; text-align: center; color: #64748b; padding: 25px;">
+                    환율 통계 데이터를 불러오는 중입니다...
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 인터랙티브 차트 시각화 영역 -->
+        <div class="chart-box">
+            <div class="chart-header">
+                <h3>📈 환율 변동 추이 차트</h3>
+                <span class="chart-hint">💡 상단 범례(달러/엔화/유로)를 클릭하여 원하는 통화만 선택해서 볼 수 있습니다.</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="fxChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 4. AI 채팅 영역 -->
+        <div class="chat-box">
+            <h3 class="chat-box-title">💬 외환 전문 AI 채팅 비서</h3>
+            <div class="chat-history" id="chat-history">
+                <div class="message ai">안녕하세요! 환율 분석 AI 비서입니다. 📈
+궁금하신 기간과 통화를 자유롭게 질문해 보세요!
+예: <strong>"최근 한달간의 엔화 환율 평균 알려줘"</strong>, <strong>"최근 1주일간 달러 최고/최저가는?"</strong></div>
+            </div>
+
+            <!-- 추천 질문 칩 -->
+            <div class="quick-chips">
+                <div class="chip" onclick="askQuestion('최근 한달간의 엔화 환율 평균 알려줘')">💴 최근 한달 엔화 평균</div>
+                <div class="chip" onclick="askQuestion('최근 1주일간 달러 환율 최고/최저가는?')">💵 최근 1주일 달러 변동</div>
+                <div class="chip" onclick="askQuestion('최근 3개월간 유로 환율 흐름과 평균 분석해줘')">💶 최근 3개월 유로 분석</div>
+                <div class="chip" onclick="askQuestion('최근 14일간 엔화와 달러 평균 비교해줘')">⚖️ 최근 14일 엔화/달러 비교</div>
+            </div>
+
+            <!-- 메시지 입력창 -->
             <div class="input-area">
-                <input type="text" id="chat-input" placeholder="엔화 환율 평균을 알려줘..." onkeypress="handleKeyPress(event)">
-                <button onclick="sendMessage()">전송</button>
+                <input type="text" id="chat-input" placeholder="엔화 환율 평균을 알려줘..." onkeydown="handleKeyDown(event)">
+                <button id="send-btn" onclick="sendMessage()">전송</button>
             </div>
         </div>
     </div>
 
     <script>
-        const API_BASE_URL = "https://fx-ai-backend.onrender.com/api";
-        let currentConversationId = null; // 대화 이어가기를 위한 ID 저장
+        // 서버 주소 결정
+        const serverSelect = document.getElementById('api-server');
+        if (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:') {
+            serverSelect.value = "http://127.0.0.1:8000/api";
+        } else {
+            serverSelect.value = "https://fx-ai-backend.onrender.com/api";
+        }
 
-        // 1. 페이지 로드 시 환율 요약 데이터 가져오기 (개선된 버전)
-        async function fetchSummary() {
+        let currentPeriod = '30d';
+        let currentConversationId = null;
+        let fxChartInstance = null;
+        let cachedAllRawData = null; // 클라이언트 사이드 차트 폴백용 데이터
+
+        function getBaseUrl() {
+            return serverSelect.value;
+        }
+
+        function handleServerChange() {
+            cachedAllRawData = null;
+            loadDashboard(currentPeriod);
+        }
+
+        function formatNum(num) {
+            if (num === null || num === undefined) return '-';
+            const parsed = parseFloat(num);
+            return isNaN(parsed) ? num : parsed.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function selectPeriod(period, btnElement) {
+            currentPeriod = period;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            if (btnElement) {
+                btnElement.classList.add('active');
+            }
+            loadDashboard(period);
+        }
+
+        async function loadDashboard(period = '30d') {
+            await Promise.all([
+                fetchSummary(period),
+                fetchChart(period)
+            ]);
+        }
+
+        // 1. 환율 요약 데이터 가져오기 (적용 기간 명확히 표시)
+        async function fetchSummary(period = '30d') {
+            const grid = document.getElementById('rates-grid');
+            const datesSpan = document.getElementById('period-dates');
+            const badgeSpan = document.getElementById('period-badge');
+
             try {
-                // API 주소가 /api/summary 인지 /api/data/summary 인지 확인이 필요할 수 있습니다.
-                const response = await fetch(`${API_BASE_URL}/data/summary`);
-                
-                if (!response.ok) {
-                    throw new Error(`서버 응답 오류: ${response.status}`);
+                let url = `${getBaseUrl()}/data/summary`;
+                if (period && period !== 'all') {
+                    url += `?period=${period}`;
                 }
-                
-                const data = await response.json();
-                
-                // 백엔드에서 반환하는 구조가 {"summary": {...}} 인지 데이터 자체가 바로 오는지 안전하게 체크
-                const summary = data.summary ? data.summary : data;
 
-                // 숫자가 문자열로 넘어올 경우를 대비한 안전한 소수점 처리 함수
-                const formatNum = (num) => {
-                    const parsed = parseFloat(num);
-                    return isNaN(parsed) ? num : parsed.toFixed(2);
-                };
-                
-                const summaryText = `[USD] 평균: ${formatNum(summary.USD['평균 환율'])} | 최저: ${summary.USD['최저 환율']} | 최고: ${summary.USD['최고 환율']}
-[JPY] 평균: ${formatNum(summary.JPY['평균 환율'])} | 최저: ${summary.JPY['최저 환율']} | 최고: ${summary.JPY['최고 환율']}
-[EUR] 평균: ${formatNum(summary.EUR['평균 환율'])} | 최저: ${summary.EUR['최저 환율']} | 최고: ${summary.EUR['최고 환율']}`;
-                
-                document.getElementById('summary-content').innerText = summaryText;
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`서버 응답 오류 (${response.status})`);
+                }
+
+                const data = await response.json();
+                const summary = data.summary ? data.summary : data;
+                const periodInfo = data.period || {};
+
+                // 적용 기간 문자열 계산
+                let periodText = "";
+                let badgeText = "";
+                if (period === '7d') badgeText = "최근 1주일 기준";
+                else if (period === '30d') badgeText = "최근 1개월 기준";
+                else if (period === '90d') badgeText = "최근 3개월 기준";
+                else badgeText = "전체 기간 (6개월)";
+
+                if (periodInfo.description) {
+                    periodText = periodInfo.description;
+                } else if (periodInfo.start_date && periodInfo.end_date) {
+                    periodText = `${periodInfo.start_date} ~ ${periodInfo.end_date}`;
+                } else {
+                    // 구버전 서버 응답 폴백: 기본 수집 데이터 기간 명시
+                    periodText = "2026-03-23 ~ 2026-09-23 (전체 수집 데이터 기준)";
+                }
+
+                datesSpan.innerText = periodText;
+                badgeSpan.innerText = badgeText;
+
+                const currencies = [
+                    { key: 'USD', name: '달러 (USD)', flag: '🇺🇸', cls: 'usd', unit: '원' },
+                    { key: 'JPY', name: '엔화 (JPY)', flag: '🇯🇵', cls: 'jpy', unit: '원 (100엔당)' },
+                    { key: 'EUR', name: '유로 (EUR)', flag: '🇪🇺', cls: 'eur', unit: '원' }
+                ];
+
+                let html = '';
+                currencies.forEach(c => {
+                    const item = summary[c.key] || {};
+                    const avgVal = item['평균 환율'] !== undefined ? item['평균 환율'] : item['avg'];
+                    const minVal = item['최저 환율'] !== undefined ? item['최저 환율'] : item['min'];
+                    const maxVal = item['최고 환율'] !== undefined ? item['최고 환율'] : item['max'];
+                    const countVal = item['데이터 개수'] || (item['count'] ? `${item['count']}개` : '133개');
+
+                    html += `
+                        <div class="rate-card ${c.cls}">
+                            <div class="rate-card-title">
+                                <span>${c.flag} ${c.name}</span>
+                                <span class="count">${countVal}</span>
+                            </div>
+                            <div class="rate-card-period">
+                                📅 적용 기간: <strong>${periodText}</strong>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">평균 환율</span>
+                                <span class="stat-value highlight">${formatNum(avgVal)} ${c.unit}</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">최저 환율</span>
+                                <span class="stat-value">${formatNum(minVal)} ${c.unit}</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">최고 환율</span>
+                                <span class="stat-value">${formatNum(maxVal)} ${c.unit}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                grid.innerHTML = html;
             } catch (error) {
                 console.error("요약 데이터 로드 실패:", error);
-                document.getElementById('summary-content').innerText = "데이터를 불러오는데 실패했습니다. (키보드 F12를 눌러 Console 탭의 에러를 확인해 주세요)";
+                datesSpan.innerText = "연결 실패";
+                badgeSpan.innerText = "오류";
+                grid.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; color: #dc2626; padding: 20px;">
+                        ⚠️ 요약 데이터를 불러오지 못했습니다. 백엔드 서버 상태를 확인해 주세요.<br>
+                        <small style="color: #64748b;">(현재 선택된 서버: ${getBaseUrl()})</small>
+                    </div>
+                `;
             }
         }
 
-        // 2. 채팅 메시지 화면에 추가하는 함수
-        function appendMessage(sender, text) {
+        // 2. Chart.js 차트 데이터 가져오기 (엔드포인트 지원 + 클라이언트 자동 폴백)
+        async function fetchChart(period = '30d') {
+            try {
+                // 1차 시도: 신규 /api/data/chart 엔드포인트 호출
+                let url = `${getBaseUrl()}/data/chart`;
+                if (period && period !== 'all') {
+                    url += `?period=${period}`;
+                }
+
+                const response = await fetch(url);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.dates && data.dates.length > 0) {
+                        renderChart(data.dates, data.series);
+                        return;
+                    }
+                }
+
+                // 2차 시도: 구버전 서버 폴백 (기존 /api/data 엔드포인트를 통해 클라이언트에서 시계열 직접 생성)
+                await fetchChartFromRawData(period);
+            } catch (err) {
+                console.warn("차트 API 직접 호출 실패, 원본 데이터로 폴백 시도:", err);
+                await fetchChartFromRawData(period);
+            }
+        }
+
+        // 구버전 서버에서도 무조건 차트가 뜨도록 하는 안전한 폴백 함수
+        async function fetchChartFromRawData(period) {
+            try {
+                if (!cachedAllRawData) {
+                    const res = await fetch(`${getBaseUrl()}/data`);
+                    if (!res.ok) return;
+                    cachedAllRawData = await res.json();
+                }
+
+                if (!Array.isArray(cachedAllRawData) || cachedAllRawData.length === 0) return;
+
+                const allDates = Array.from(new Set(cachedAllRawData.map(d => d.date).filter(Boolean))).sort();
+                const maxDate = allDates[allDates.length - 1];
+
+                let days = null;
+                if (period === '7d') days = 7;
+                else if (period === '30d') days = 30;
+                else if (period === '90d') days = 90;
+
+                let startDate = null;
+                if (days) {
+                    const refDate = new Date(maxDate);
+                    refDate.setDate(refDate.getDate() - days);
+                    startDate = refDate.toISOString().slice(0, 10);
+                }
+
+                const filteredDates = allDates.filter(d => (!startDate || d >= startDate) && d <= maxDate);
+                const dateMap = {};
+                filteredDates.forEach(d => { dateMap[d] = { USD: null, JPY: null, EUR: null }; });
+
+                cachedAllRawData.forEach(item => {
+                    const d = item.date;
+                    const c = item.currency;
+                    const v = item.value;
+                    if (dateMap[d] && c in dateMap[d]) {
+                        dateMap[d][c] = parseFloat(v);
+                    }
+                });
+
+                const series = {
+                    USD: filteredDates.map(d => dateMap[d].USD),
+                    JPY: filteredDates.map(d => dateMap[d].JPY),
+                    EUR: filteredDates.map(d => dateMap[d].EUR)
+                };
+
+                renderChart(filteredDates, series);
+            } catch (error) {
+                console.error("차트 폴백 렌더링 실패:", error);
+            }
+        }
+
+        // Chart.js 캔버스 렌더링
+        function renderChart(labels, series) {
+            const canvas = document.getElementById('fxChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+
+            if (fxChartInstance) {
+                fxChartInstance.destroy();
+            }
+
+            const pointRadius = labels.length > 50 ? 0 : (labels.length > 20 ? 2 : 4);
+
+            fxChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '달러 (USD)',
+                            data: series.USD || [],
+                            borderColor: '#0284c7',
+                            backgroundColor: 'rgba(2, 132, 199, 0.05)',
+                            borderWidth: 2.2,
+                            tension: 0.2,
+                            pointRadius: pointRadius,
+                            pointHoverRadius: 5,
+                            fill: false
+                        },
+                        {
+                            label: '엔화 (JPY 100엔)',
+                            data: series.JPY || [],
+                            borderColor: '#e11d48',
+                            backgroundColor: 'rgba(225, 29, 72, 0.05)',
+                            borderWidth: 2.2,
+                            tension: 0.2,
+                            pointRadius: pointRadius,
+                            pointHoverRadius: 5,
+                            fill: false
+                        },
+                        {
+                            label: '유로 (EUR)',
+                            data: series.EUR || [],
+                            borderColor: '#7c3aed',
+                            backgroundColor: 'rgba(124, 58, 237, 0.05)',
+                            borderWidth: 2.2,
+                            tension: 0.2,
+                            pointRadius: pointRadius,
+                            pointHoverRadius: 5,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                boxWidth: 8,
+                                font: { size: 12, weight: '600' }
+                            }
+                        },
+                        tooltip: {
+                            padding: 10,
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.dataset.label}: ${context.parsed.y ? context.parsed.y.toLocaleString() : '-'}원`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 8,
+                                font: { size: 11 }
+                            }
+                        },
+                        y: {
+                            grid: { color: '#f1f5f9' },
+                            ticks: {
+                                callback: function(val) {
+                                    return val.toLocaleString() + '원';
+                                },
+                                font: { size: 11 }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 3. 마크다운 변환 함수 (표가 절대 깨지지 않도록 Marked.js + 수동 파서 결합)
+        function formatMarkdown(content) {
+            if (!content) return "";
+            if (window.marked && typeof window.marked.parse === 'function') {
+                try {
+                    return window.marked.parse(content);
+                } catch (e) {
+                    console.warn("Marked.js 파싱 에러, 수동 파서 사용:", e);
+                }
+            }
+
+            // 폴백: 마크다운 표 및 기본 마크다운 수동 파싱
+            let lines = content.split('\n');
+            let inTable = false;
+            let tableHtml = '';
+            let finalHtml = '';
+
+            for (let line of lines) {
+                let trimmed = line.trim();
+                if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+                    if (trimmed.includes('---')) {
+                        continue; // 구분선 무시
+                    }
+                    let cells = trimmed.split('|').slice(1, -1).map(c => c.trim());
+                    if (!inTable) {
+                        inTable = true;
+                        tableHtml = '<table><thead><tr>' + cells.map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+                    } else {
+                        tableHtml += '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>';
+                    }
+                } else {
+                    if (inTable) {
+                        inTable = false;
+                        tableHtml += '</tbody></table>';
+                        finalHtml += tableHtml;
+                        tableHtml = '';
+                    }
+                    if (trimmed.startsWith('## ')) {
+                        finalHtml += `<h3>${trimmed.replace('## ', '')}</h3>`;
+                    } else if (trimmed.startsWith('> ')) {
+                        finalHtml += `<blockquote>${trimmed.replace('> ', '')}</blockquote>`;
+                    } else if (trimmed.length > 0) {
+                        finalHtml += `<p>${trimmed}</p>`;
+                    }
+                }
+            }
+            if (inTable) {
+                tableHtml += '</tbody></table>';
+                finalHtml += tableHtml;
+            }
+
+            // 볼드체 치환
+            finalHtml = finalHtml.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            return finalHtml;
+        }
+
+        // 4. 채팅 메시지 추가
+        function appendMessage(sender, text, isMarkdown = true) {
             const chatHistory = document.getElementById('chat-history');
             const msgDiv = document.createElement('div');
             msgDiv.classList.add('message', sender);
-            msgDiv.innerText = text;
+
+            if (sender === 'ai' && isMarkdown) {
+                msgDiv.innerHTML = formatMarkdown(text);
+            } else {
+                msgDiv.innerText = text;
+            }
+
             chatHistory.appendChild(msgDiv);
-            chatHistory.scrollTop = chatHistory.scrollHeight; // 스크롤 맨 아래로 이동
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+            return msgDiv;
         }
 
-        // 3. 백엔드로 메시지 전송 및 AI 답변 받기
+        function askQuestion(text) {
+            const inputField = document.getElementById('chat-input');
+            inputField.value = text;
+            sendMessage();
+        }
+
+        // 5. 메시지 전송 및 AI 답변 처리
         async function sendMessage() {
             const inputField = document.getElementById('chat-input');
+            const sendBtn = document.getElementById('send-btn');
             const message = inputField.value.trim();
             if (!message) return;
 
-            // 내 메시지 화면에 표시
-            appendMessage('user', message);
+            appendMessage('user', message, false);
             inputField.value = '';
+            inputField.disabled = true;
+            sendBtn.disabled = true;
+
+            const loadingMsg = appendMessage('ai', '🤖 외환 데이터를 분석하여 답변을 구성하고 있습니다...', false);
+            loadingMsg.classList.add('loading');
 
             try {
                 const payload = { message: message };
                 if (currentConversationId) {
-                    payload.conversation_id = currentConversationId; // 기존 대화 ID 전달
+                    payload.conversation_id = currentConversationId;
                 }
 
-                const response = await fetch(`${API_BASE_URL}/chat`, {
+                const response = await fetch(`${getBaseUrl()}/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
 
                 const data = await response.json();
-                
+                loadingMsg.remove();
+
                 if (data.conversation_id) {
-                    currentConversationId = data.conversation_id; // 백엔드에서 준 새 ID 저장
+                    currentConversationId = data.conversation_id;
                 }
-                
-                // AI 답변 화면에 표시
-                appendMessage('ai', data.reply || "답변을 가져오지 못했습니다.");
+
+                const replyText = data.reply || "답변을 가져오지 못했습니다.";
+                appendMessage('ai', replyText, true);
             } catch (error) {
-                appendMessage('ai', "서버 통신 중 에러가 발생했습니다.");
+                loadingMsg.remove();
+                appendMessage('ai', `⚠️ 서버 통신 중 오류가 발생했습니다: ${error.message}\n백엔드 서버(${getBaseUrl()}) 연결 상태를 확인해 주세요.`, false);
+            } finally {
+                inputField.disabled = false;
+                sendBtn.disabled = false;
+                inputField.focus();
             }
         }
 
-        // 엔터키 입력 처리
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') sendMessage();
+        function handleKeyDown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                if (event.isComposing) return;
+                event.preventDefault();
+                sendMessage();
+            }
         }
 
-        // 실행
-        fetchSummary();
+        // 초기 실행
+        loadDashboard('30d');
     </script>
-
 </body>
 </html>

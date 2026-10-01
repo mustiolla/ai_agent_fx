@@ -1,17 +1,8 @@
 import yfinance as yf
-import firebase_admin
-from firebase_admin import credentials, firestore
-import os
-from dotenv import load_dotenv
+from firebase_config import get_firestore_db
 
-# 1. 환경 변수(.env) 불러오기
-load_dotenv()
-key_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
-
-# 2. 파이어베이스 로그인 및 연결
-cred = credentials.Certificate(key_path)
-firebase_admin.initialize_app(cred)
-db = firestore.client()
+# 1. 파이어베이스 클라이언트 초기화
+db = get_firestore_db()
 
 # 3. 달러, 엔화, 유로 심볼 설정
 tickers = {"USD": "KRW=X", "JPY": "JPYKRW=X", "EUR": "EURKRW=X"}
