@@ -196,26 +196,49 @@
             border-radius: 10px;
         }
         .rate-card-period {
-            font-size: 0.78rem;
+            font-size: 0.75rem;
             color: #475569;
             background: #f8fafc;
             border: 1px solid #e2e8f0;
             border-radius: 6px;
             padding: 4px 8px;
             margin-bottom: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .stat-row {
             display: flex;
             justify-content: space-between;
-            align-items: baseline;
+            align-items: center;
             margin-bottom: 7px;
             font-size: 0.9rem;
+            white-space: nowrap;
         }
-        .stat-label { color: var(--text-sub); }
-        .stat-value { font-weight: 600; color: #0f172a; }
+        .stat-label {
+            color: var(--text-sub);
+            white-space: nowrap;
+            flex-shrink: 0;
+            font-size: 0.88rem;
+        }
+        .stat-value {
+            font-weight: 600;
+            color: #0f172a;
+            white-space: nowrap;
+            text-align: right;
+            display: inline-flex;
+            align-items: baseline;
+            gap: 2px;
+        }
         .stat-value.highlight {
-            font-size: 1.25rem;
+            font-size: 1.18rem;
             color: var(--primary);
+        }
+        .stat-value .sub-unit {
+            font-size: 0.72rem;
+            color: #64748b;
+            font-weight: 500;
+            letter-spacing: -0.3px;
         }
 
         /* 3. 인터랙티브 차트 박스 */
@@ -576,8 +599,8 @@
 
                 const currencies = [
                     { key: 'USD', name: '달러 (USD)', flag: '🇺🇸', cls: 'usd', unit: '원' },
-                    { key: 'JPY', name: '엔화 (JPY)', flag: '🇯🇵', cls: 'jpy', unit: '원 (100엔당)' },
-                    { key: 'EUR', name: '유로 (EUR)', flag: '🇪🇺', cls: 'eur', unit: '원' }
+                    { key: 'EUR', name: '유로 (EUR)', flag: '🇪🇺', cls: 'eur', unit: '원' },
+                    { key: 'JPY', name: '엔화 (JPY)', flag: '🇯🇵', cls: 'jpy', unit: '원', subNote: '(100엔당)' }
                 ];
 
                 let html = '';
@@ -588,26 +611,30 @@
                     const maxVal = item['최고 환율'] !== undefined ? item['최고 환율'] : item['max'];
                     const countVal = item['데이터 개수'] || (item['count'] ? `${item['count']}개` : '133개');
 
+                    const unitHtml = c.subNote 
+                        ? `${c.unit} <span class="sub-unit">${c.subNote}</span>` 
+                        : c.unit;
+
                     html += `
                         <div class="rate-card ${c.cls}">
                             <div class="rate-card-title">
                                 <span>${c.flag} ${c.name}</span>
                                 <span class="count">${countVal}</span>
                             </div>
-                            <div class="rate-card-period">
+                            <div class="rate-card-period" title="적용 기간: ${periodText}">
                                 📅 적용 기간: <strong>${periodText}</strong>
                             </div>
                             <div class="stat-row">
                                 <span class="stat-label">평균 환율</span>
-                                <span class="stat-value highlight">${formatNum(avgVal)} ${c.unit}</span>
+                                <span class="stat-value highlight">${formatNum(avgVal)} ${unitHtml}</span>
                             </div>
                             <div class="stat-row">
                                 <span class="stat-label">최저 환율</span>
-                                <span class="stat-value">${formatNum(minVal)} ${c.unit}</span>
+                                <span class="stat-value">${formatNum(minVal)} ${unitHtml}</span>
                             </div>
                             <div class="stat-row">
                                 <span class="stat-label">최고 환율</span>
-                                <span class="stat-value">${formatNum(maxVal)} ${c.unit}</span>
+                                <span class="stat-value">${formatNum(maxVal)} ${unitHtml}</span>
                             </div>
                         </div>
                     `;
@@ -733,10 +760,10 @@
                             fill: false
                         },
                         {
-                            label: '엔화 (JPY 100엔)',
-                            data: series.JPY || [],
-                            borderColor: '#e11d48',
-                            backgroundColor: 'rgba(225, 29, 72, 0.05)',
+                            label: '유로 (EUR)',
+                            data: series.EUR || [],
+                            borderColor: '#7c3aed',
+                            backgroundColor: 'rgba(124, 58, 237, 0.05)',
                             borderWidth: 2.2,
                             tension: 0.2,
                             pointRadius: pointRadius,
@@ -744,10 +771,10 @@
                             fill: false
                         },
                         {
-                            label: '유로 (EUR)',
-                            data: series.EUR || [],
-                            borderColor: '#7c3aed',
-                            backgroundColor: 'rgba(124, 58, 237, 0.05)',
+                            label: '엔화 (JPY 100엔)',
+                            data: series.JPY || [],
+                            borderColor: '#e11d48',
+                            backgroundColor: 'rgba(225, 29, 72, 0.05)',
                             borderWidth: 2.2,
                             tension: 0.2,
                             pointRadius: pointRadius,

@@ -165,10 +165,10 @@ def calculate_summary(
         start_dt = ref_dt - timedelta(days=days)
         resolved_start_date = start_dt.strftime("%Y-%m-%d")
 
-    if currency and currency.upper() in ["USD", "JPY", "EUR"]:
+    if currency and currency.upper() in ["USD", "EUR", "JPY"]:
         target_currencies = [currency.upper()]
     else:
-        target_currencies = ["USD", "JPY", "EUR"]
+        target_currencies = ["USD", "EUR", "JPY"]
 
     summary_stats = {
         c: {"count": 0, "sum": 0.0, "min": float("inf"), "max": 0.0}
@@ -297,7 +297,7 @@ def get_chart_data(
         and (not resolved_end_date or d <= resolved_end_date)
     ]
 
-    date_map = {d: {"USD": None, "JPY": None, "EUR": None} for d in filtered_dates}
+    date_map = {d: {"USD": None, "EUR": None, "JPY": None} for d in filtered_dates}
     for item in all_data:
         d = item.get("date")
         c = item.get("currency")
@@ -319,8 +319,8 @@ def get_chart_data(
         "dates": filtered_dates,
         "series": {
             "USD": [date_map[d]["USD"] for d in filtered_dates],
-            "JPY": [date_map[d]["JPY"] for d in filtered_dates],
             "EUR": [date_map[d]["EUR"] for d in filtered_dates],
+            "JPY": [date_map[d]["JPY"] for d in filtered_dates],
         },
         "period": {
             "days": days,
