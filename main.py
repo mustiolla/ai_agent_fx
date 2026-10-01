@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import math
 import io
 import csv
 import requests
@@ -10,7 +11,6 @@ from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from firebase_config import get_firestore_db
@@ -62,8 +62,8 @@ def invalidate_cache():
 # 3. FastAPI 앱 초기화
 app = FastAPI(
     title="환율 AI 비서 API",
-    version="2.3.0",
-    description="외환(USD, EUR, JPY) 시계열 통계, 실시간 등락률 분석, 자동 동기화, 환전 계산기, CSV 내보내기 및 Claude AI 금융 비서 서비스"
+    version="2.4.0",
+    description="외환(USD, EUR, JPY) 시계열 통계, 표준편차 분석, 실시간 동기화, 환전 계산기, CSV/JSON 내보내기, MCP 서버 지원 및 Claude AI 금융 에이전트 서비스"
 )
 
 app.add_middleware(
@@ -93,7 +93,7 @@ def read_root():
     return {
         "status": "online",
         "message": "환율 AI 비서 백엔드 서버가 정상적으로 실행 중입니다!",
-        "version": "2.3.0"
+        "version": "2.4.0"
     }
 
 
@@ -137,7 +137,7 @@ def delete_data(doc_id: str):
     return {"message": f"{doc_id} 데이터가 삭제되었습니다."}
 
 
-# 9. 기간별 요약 통계 계산 함수 (등락률 및 전일 대비 변화량 포함)
+# 9. 기간별 요약 통계 계산 함수 (등락률, 표준편차 및 가격변동폭 확장)
 def calculate_summary(
     currency: Optional[str] = None,
     days: Optional[int] = None,
@@ -145,7 +145,7 @@ def calculate_summary(
     end_date: Optional[str] = None,
     period: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """기간 및 통화에 따른 요약 통계(평균, 최저, 최고) 및 전일 대비 등락폭/등락률을 계산합니다."""
+    """기간 및 통화에 따른 요약 통계(평균, 최저, 최고, 표준편차, 변동폭) 및 전일 대비 등락폭/등락률을 계산합니다."""
     all_data = get_cached_rates()
     if not all_data:
         return {"summary": {}, "period": {"description": "데이터가 없습니다."}}
@@ -224,7 +224,7 @@ def calculate_summary(
 
     # 선택된 기간 내의 요약 통계 계산
     summary_stats = {
-        c: {"count": 0, "sum": 0.0, "min": float("inf"), "max": 0.0}
+        c: {"count": 0, "sum": 0.0, "min": float("inf"), "max": 0.0, "values": []}
         for c in target_currencies
     }
 
@@ -242,6 +242,7 @@ def calculate_summary(
         val = float(item.get("value", 0))
         summary_stats[curr]["count"] += 1
         summary_stats[curr]["sum"] += val
+        summary_stats[curr]["values"].append(val)
         if val < summary_stats[curr]["min"]:
             summary_stats[curr]["min"] = val
         if val > summary_stats[curr]["max"]:
@@ -251,10 +252,17 @@ def calculate_summary(
     for curr in target_currencies:
         stats = summary_stats[curr]
         d_stat = delta_info.get(curr, {})
-        if stats["count"] > 0:
-            avg = round(stats["sum"] / stats["count"], 2)
+        cnt = stats["count"]
+        if cnt > 0:
+            avg = round(stats["sum"] / cnt, 2)
+            # 보너스 과제 지표: 표준편차, 변동폭, 변동계수(CV)
+            variance = sum((v - avg) ** 2 for v in stats["values"]) / cnt
+            std_dev = round(math.sqrt(variance), 2)
+            price_gap = round(stats["max"] - stats["min"], 2)
+            cv = round((std_dev / avg) * 100, 2) if avg > 0 else 0.0
+
             result[curr] = {
-                "데이터 개수": f"{stats['count']}개",
+                "데이터 개수": f"{cnt}개",
                 "평균 환율": avg,
                 "최저 환율": round(stats["min"], 2),
                 "최고 환율": round(stats["max"], 2),
@@ -264,6 +272,10 @@ def calculate_summary(
                 "등락폭": d_stat.get("diff", 0.0),
                 "등락률": d_stat.get("percent", 0.0),
                 "등락구분": d_stat.get("direction", "same"),
+                # 추가 통계 지표 (보너스 과제)
+                "표준편차": std_dev,
+                "가격변동폭": price_gap,
+                "변동계수": f"{cv}%"
             }
         else:
             result[curr] = {
@@ -277,6 +289,9 @@ def calculate_summary(
                 "등락폭": 0.0,
                 "등락률": 0.0,
                 "등락구분": "same",
+                "표준편차": 0.0,
+                "가격변동폭": 0.0,
+                "변동계수": "0.0%"
             }
 
     period_desc = (
@@ -318,7 +333,51 @@ def get_summary(
     )
 
 
-# 11. 인터랙티브 차트용 시계열 데이터 API (GET /api/data/chart)
+# 11. 심층 통계 분석 API (GET /api/data/statistics) (보너스 과제 추가 지표)
+@app.get("/api/data/statistics")
+def get_statistics(
+    days: Optional[int] = 30,
+    period: Optional[str] = None
+):
+    """
+    환율의 변동성(표준편차), 고저 밴드 괴리율, 변동계수(CV), 시장 안정도 등 심층 통계 지표를 제공합니다.
+    """
+    summary_data = calculate_summary(days=days, period=period)
+    sum_dict = summary_data.get("summary", {})
+    stats_result = {}
+
+    for curr, s in sum_dict.items():
+        avg = s.get("평균 환율")
+        std = s.get("표준편차", 0.0)
+        gap = s.get("가격변동폭", 0.0)
+        latest = s.get("최신 환율")
+
+        # 7일/기간 평균 대비 괴리율
+        disparity = round(((latest - avg) / avg) * 100, 2) if avg and latest else 0.0
+        
+        # 변동성 안정도 평가
+        cv_val = float(str(s.get("변동계수", "0")).replace("%", ""))
+        stability = "매우 안정" if cv_val < 1.0 else ("보통" if cv_val < 2.5 else "변동성 높음")
+
+        stats_result[curr] = {
+            "최신환율": latest,
+            "평균환율": avg,
+            "최저환율": s.get("최저 환율"),
+            "최고환율": s.get("최고 환율"),
+            "가격변동폭(Gap)": gap,
+            "표준편차(Volatility)": std,
+            "변동계수(CV)": f"{cv_val}%",
+            "평균대비괴리율": f"{disparity:+0.2f}%",
+            "시장안정도": stability
+        }
+
+    return {
+        "period": summary_data.get("period"),
+        "statistics": stats_result
+    }
+
+
+# 12. 인터랙티브 차트용 시계열 데이터 API (GET /api/data/chart)
 @app.get("/api/data/chart")
 def get_chart_data(
     days: Optional[int] = None,
@@ -397,7 +456,7 @@ def get_chart_data(
     }
 
 
-# 12. 최신 환율 증분 동기화 API (POST /api/data/sync)
+# 13. 최신 환율 증분 동기화 API (POST /api/data/sync)
 @app.post("/api/data/sync")
 def sync_latest_rates():
     """Yahoo Finance에서 최근 1개월간의 최신 환율 데이터를 수집하여 Firestore에 증분 저장합니다."""
@@ -445,7 +504,7 @@ def sync_latest_rates():
     }
 
 
-# 13. AI 오늘의 외환 시장 한 줄 데일리 브리핑 (GET /api/market/briefing)
+# 14. AI 오늘의 외환 시장 한 줄 데일리 브리핑 (GET /api/market/briefing)
 @app.get("/api/market/briefing")
 def get_market_briefing():
     """Claude AI를 통해 분석된 오늘의 외환 시장 핵심 동향과 환전 팁을 제공합니다 (1시간 캐시)."""
@@ -468,9 +527,9 @@ def get_market_briefing():
 
     market_context = f"""
     - 기준일: {period_info.get('end_date')}
-    - 달러(USD): 최신 {usd_info.get('최신 환율')}원 (전일비 {usd_info.get('등락폭')}원, {usd_info.get('등락률')}%, 최근 7일 평균 {usd_info.get('평균 환율')}원)
-    - 유로(EUR): 최신 {eur_info.get('최신 환율')}원 (전일비 {eur_info.get('등락폭')}원, {eur_info.get('등락률')}%, 최근 7일 평균 {eur_info.get('평균 환율')}원)
-    - 엔화(JPY 100엔당): 최신 {jpy_info.get('최신 환율')}원 (전일비 {jpy_info.get('등락폭')}원, {jpy_info.get('등락률')}%, 최근 7일 평균 {jpy_info.get('평균 환율')}원)
+    - 달러(USD): 최신 {usd_info.get('최신 환율')}원 (전일비 {usd_info.get('등락폭')}원, {usd_info.get('등락률')}%, 최근 7일 평균 {usd_info.get('평균 환율')}원, 표준편차 {usd_info.get('표준편차')}원)
+    - 유로(EUR): 최신 {eur_info.get('최신 환율')}원 (전일비 {eur_info.get('등락폭')}원, {eur_info.get('등락률')}%, 최근 7일 평균 {eur_info.get('평균 환율')}원, 표준편차 {eur_info.get('표준편차')}원)
+    - 엔화(JPY 100엔당): 최신 {jpy_info.get('최신 환율')}원 (전일비 {jpy_info.get('등락폭')}원, {jpy_info.get('등락률')}%, 최근 7일 평균 {jpy_info.get('평균 환율')}원, 표준편차 {jpy_info.get('표준편차')}원)
     """
 
     prompt = f"""당신은 외환(FX) 시장 수석 애널리스트입니다.
@@ -518,7 +577,7 @@ def get_market_briefing():
     }
 
 
-# 14. 통화 환전 계산 엔진 (추천 기능 4번)
+# 15. 통화 환전 계산 엔진 (추천 기능 4번)
 def compute_exchange(
     amount: float,
     from_currency: str,
@@ -569,8 +628,6 @@ def compute_exchange(
 
     # 2. 목표 통화로 변환
     if to_curr == "KRW":
-        # 외화를 팔아서 원화를 받음 (Spread 차감)
-        # 일반 수수료 시 수령액 vs 우대 수수료 시 수령액
         regular_krw = base_krw * (1.0 - base_spread)
         preferential_krw = base_krw * (1.0 - effective_spread)
         converted_amount = round(preferential_krw, 2)
@@ -580,7 +637,6 @@ def compute_exchange(
         formula = f"1 {from_curr} 당 약 {applied_rate} KRW 적용 (우대율 {int(preferential_rate * 100)}%)"
 
     elif from_curr == "KRW":
-        # 원화로 외화를 매수 (Spread 가산)
         unit_price_regular = krw_per_unit[to_curr] * (1.0 + base_spread)
         unit_price_pref = krw_per_unit[to_curr] * (1.0 + effective_spread)
         converted_amount = round(amount / unit_price_pref, 2)
@@ -590,7 +646,6 @@ def compute_exchange(
         formula = f"1 {to_curr} 당 약 {applied_rate} KRW 적용 (우대율 {int(preferential_rate * 100)}%)"
 
     else:
-        # 외화 ↔ 외화 (예: USD -> JPY 크로스 환전)
         market_standard = round(base_krw / krw_per_unit[to_curr], 2)
         converted_amount = round(market_standard * (1.0 - effective_spread), 2)
         saved_amount = round(market_standard * (base_spread - effective_spread), 2)
@@ -613,7 +668,7 @@ def compute_exchange(
     }
 
 
-# 15. 환전 계산기 API (GET /api/exchange/calculate) (추천 기능 4번)
+# 16. 환전 계산기 API (GET /api/exchange/calculate) (추천 기능 4번)
 @app.get("/api/exchange/calculate")
 def get_exchange_calculation(
     amount: float,
@@ -632,15 +687,12 @@ def get_exchange_calculation(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# 16. 환율 데이터 CSV 내보내기 API (GET /api/data/export/csv) (추천 기능 6번)
+# 17. 환율 데이터 CSV 내보내기 API (GET /api/data/export/csv) (추천 기능 6번)
 @app.get("/api/data/export/csv")
 def export_rates_csv(
     period: Optional[str] = "30d",
     currency: Optional[str] = None
 ):
-    """
-    선택된 기간의 환율 시계열 데이터를 엑셀 호환 UTF-8 BOM 인코딩 CSV 파일로 다운로드합니다.
-    """
     all_data = get_cached_rates()
     if not all_data:
         raise HTTPException(status_code=404, detail="내보낼 환율 데이터가 없습니다.")
@@ -668,7 +720,6 @@ def export_rates_csv(
             ref_dt = datetime.now()
         start_date = (ref_dt - timedelta(days=days)).strftime("%Y-%m-%d")
 
-    # 필터링
     filtered = []
     for item in all_data:
         curr = item.get("currency")
@@ -679,11 +730,9 @@ def export_rates_csv(
             continue
         filtered.append(item)
 
-    # 날짜 오름차순, 통화 순 정렬
     curr_order = {"USD": 1, "EUR": 2, "JPY": 3}
     filtered.sort(key=lambda x: (x.get("date", ""), curr_order.get(x.get("currency", ""), 99)))
 
-    # CSV 생성 (UTF-8 BOM: \ufeff 로 엑셀 한글 깨짐 완전 방지)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["날짜", "통화", "환율(KRW)", "기준단위", "메모"])
@@ -717,7 +766,72 @@ def export_rates_csv(
     )
 
 
-# 17. 대화 목록 조회 API (GET /api/conversations) (추천 기능 5번 연동)
+# 18. 환율 데이터 JSON 내보내기 API (GET /api/data/export/json) (보너스 과제)
+@app.get("/api/data/export/json")
+def export_rates_json(
+    period: Optional[str] = "30d",
+    currency: Optional[str] = None
+):
+    """
+    선택된 기간의 환율 시계열 데이터를 JSON 파일로 다운로드합니다.
+    """
+    all_data = get_cached_rates()
+    if not all_data:
+        raise HTTPException(status_code=404, detail="내보낼 데이터가 없습니다.")
+
+    all_dates = sorted(list(set(d["date"] for d in all_data if "date" in d)))
+    max_db_date = max(all_dates) if all_dates else datetime.now().strftime("%Y-%m-%d")
+
+    days = None
+    if period:
+        p_lower = str(period).lower()
+        if p_lower in ["1w", "7d", "week"]:
+            days = 7
+        elif p_lower in ["1m", "30d", "month"]:
+            days = 30
+        elif p_lower in ["3m", "90d", "3months"]:
+            days = 90
+        elif p_lower in ["6m", "180d", "all"]:
+            days = None
+
+    start_date = None
+    if days is not None:
+        try:
+            ref_dt = datetime.strptime(max_db_date, "%Y-%m-%d")
+        except ValueError:
+            ref_dt = datetime.now()
+        start_date = (ref_dt - timedelta(days=days)).strftime("%Y-%m-%d")
+
+    filtered = []
+    for item in all_data:
+        curr = item.get("currency")
+        d = item.get("date")
+        if currency and curr != currency.upper():
+            continue
+        if start_date and d < start_date:
+            continue
+        filtered.append({
+            "date": d,
+            "currency": curr,
+            "value": item.get("value"),
+            "memo": item.get("memo", "수집데이터")
+        })
+
+    filtered.sort(key=lambda x: (x["date"], x["currency"]))
+    today_str = datetime.now().strftime("%Y%m%d")
+    filename = f"exchange_rates_{period or 'all'}_{today_str}.json"
+    json_bytes = json.dumps(filtered, ensure_ascii=False, indent=2).encode("utf-8")
+
+    return Response(
+        content=json_bytes,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+# 19. 대화 목록 조회 API (GET /api/conversations) (추천 기능 5번 연동)
 @app.get("/api/conversations")
 def get_conversations():
     docs = db.collection("conversations").stream()
@@ -730,7 +844,7 @@ def get_conversations():
     return results
 
 
-# 18. 특정 대화 불러오기 API (GET /api/conversations/{doc_id}) (추천 기능 5번 연동)
+# 20. 특정 대화 불러오기 API (GET /api/conversations/{doc_id}) (추천 기능 5번 연동)
 @app.get("/api/conversations/{doc_id}")
 def get_conversation(doc_id: str):
     doc = db.collection("conversations").document(doc_id).get()
@@ -741,7 +855,7 @@ def get_conversation(doc_id: str):
     raise HTTPException(status_code=404, detail="해당 대화를 찾을 수 없습니다.")
 
 
-# 19. 대화 삭제 API (DELETE /api/conversations/{doc_id}) (추천 기능 5번 연동)
+# 21. 대화 삭제 API (DELETE /api/conversations/{doc_id}) (추천 기능 5번 연동)
 @app.delete("/api/conversations/{doc_id}")
 def delete_conversation(doc_id: str):
     doc_ref = db.collection("conversations").document(doc_id)
@@ -751,7 +865,7 @@ def delete_conversation(doc_id: str):
     return {"message": "대화가 성공적으로 삭제되었습니다."}
 
 
-# 20. AI 챗봇 API (POST /api/chat)
+# 22. AI 챗봇 API (POST /api/chat) - 멀티 도구 호출(Tool Calling) 연동
 @app.post("/api/chat")
 def chat_with_ai(req: ChatRequest):
     sum_7d = calculate_summary(days=7)
@@ -785,19 +899,20 @@ def chat_with_ai(req: ChatRequest):
 - 엔화(JPY): {sum_all['summary'].get('JPY')}
 
 [답변 가이드라인]
-1. 사용자가 '최근 한달', '최근 1주일', '최근 3개월' 등 특정 기간을 문의하면 위 요약 데이터에서 해당 기간의 수치(평균, 최저, 최고, 전일대비 등락)를 정확히 인용하세요.
+1. 사용자가 '최근 한달', '최근 1주일', '최근 3개월' 등 특정 기간을 문의하면 위 요약 데이터에서 해당 기간의 수치(평균, 최저, 최고, 전일대비 등락, 표준편차)를 정확히 인용하세요.
 2. 위 사전자료에 없는 임의의 기간(예: 최근 14일, 특정 월 등)을 요청받으면 반드시 get_exchange_rate_summary 도구를 호출하여 조회하세요.
 3. 사용자가 "100만원 환전하면 엔화로 얼마야?", "500달러를 원화로 바꾸면?" 등 환전 계산을 문의할 경우 반드시 calculate_exchange 도구를 호출하여 정확한 환산 금액과 우대 팁을 안내하세요.
-4. 통화별 환율 단위:
+4. 사용자가 "변동성이 어떤가요?", "표준편차나 가격 갭을 분석해줘" 등 심층 통계를 문의하면 get_market_statistics 도구를 호출하세요.
+5. 통화별 환율 단위:
    - 달러(USD), 유로(EUR): 1단위당 원화(KRW)
    - 엔화(JPY): 100엔당 원화(KRW)
-5. 답변 시 마크다운 표, 글머리 기호, 이모지를 적절히 활용하여 가독성 높게 작성하세요.
+6. 답변 시 마크다운 표, 글머리 기호, 이모지를 적절히 활용하여 가독성 높게 작성하세요.
 """
 
     tools = [
         {
             "name": "get_exchange_rate_summary",
-            "description": "사용자가 요청한 특정 기간(최근 N일 또는 특정 날짜 범위)과 통화의 환율 요약(평균, 최저, 최고 환율)을 계산하여 반환합니다.",
+            "description": "사용자가 요청한 특정 기간(최근 N일 또는 특정 날짜 범위)과 통화의 환율 요약(평균, 최저, 최고 환율, 표준편차)을 계산하여 반환합니다.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -848,6 +963,19 @@ def chat_with_ai(req: ChatRequest):
                     }
                 },
                 "required": ["amount", "from_currency", "to_currency"]
+            }
+        },
+        {
+            "name": "get_market_statistics",
+            "description": "최근 기간 동안의 환율 변동성(표준편차), 가격 변동폭(Gap), 변동계수(CV), 시장 안정도 등 심층 금융 통계 지표를 반환합니다.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "days": {
+                        "type": "integer",
+                        "description": "분석 기간 일수 (기본값: 30)"
+                    }
+                }
             }
         }
     ]
@@ -927,6 +1055,15 @@ def chat_with_ai(req: ChatRequest):
                         "type": "tool_result",
                         "tool_use_id": t_id,
                         "content": json.dumps(t_summary, ensure_ascii=False),
+                    })
+
+                elif t_name == "get_market_statistics":
+                    t_days = int(t_input.get("days", 30))
+                    t_stats = get_statistics(days=t_days)
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": t_id,
+                        "content": json.dumps(t_stats, ensure_ascii=False),
                     })
 
         messages.append({"role": "user", "content": tool_results})

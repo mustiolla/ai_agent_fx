@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>환율 분석 AI 비서 (기간 분석, 실시간 동기화 및 스마트 환전)</title>
+    <title>환율 분석 AI 비서 (기간 분석, 실시간 동기화, 스마트 환전 & 다크모드)</title>
     <!-- Chart.js & Marked.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -27,8 +27,26 @@
             --same-bg: #f1f5f9;
         }
 
+        /* 다크 모드 스타일 테마 (보너스 과제) */
+        body.dark-theme {
+            --primary: #3b82f6;
+            --primary-hover: #60a5fa;
+            --bg: #0b0f19;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --border: #334155;
+            --up-color: #f87171;
+            --up-bg: rgba(239, 68, 68, 0.15);
+            --down-color: #60a5fa;
+            --down-bg: rgba(59, 130, 246, 0.15);
+            --same-color: #94a3b8;
+            --same-bg: rgba(148, 163, 184, 0.15);
+        }
+
         * {
             box-sizing: border-box;
+            transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
         }
 
         body {
@@ -44,7 +62,7 @@
 
         .container {
             width: 100%;
-            max-width: 960px;
+            max-width: 980px;
             display: flex;
             gap: 20px;
             flex-direction: column;
@@ -95,19 +113,19 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
-            background: white;
+            background: var(--card-bg);
             color: var(--text-main);
         }
         .btn:hover {
             background: #f1f5f9;
         }
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
+        body.dark-theme .btn:hover {
+            background: #334155;
         }
-        .btn-primary:hover {
-            background: var(--primary-hover);
+        .btn-theme-toggle {
+            background: var(--card-bg);
+            color: var(--text-main);
+            border-color: var(--border);
         }
         .btn-sync {
             background: #f0fdf4;
@@ -116,6 +134,11 @@
         }
         .btn-sync:hover {
             background: #dcfce7;
+        }
+        body.dark-theme .btn-sync {
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+            border-color: #166534;
         }
         .btn-sync.spinning svg {
             animation: spin 1s linear infinite;
@@ -129,7 +152,7 @@
             border-radius: 8px;
             border: 1px solid var(--border);
             font-size: 0.82rem;
-            background: white;
+            background: var(--card-bg);
             color: var(--text-main);
             cursor: pointer;
             outline: none;
@@ -143,6 +166,11 @@
             padding: 18px 22px;
             box-shadow: 0 2px 5px rgba(2, 132, 199, 0.06);
             position: relative;
+        }
+        body.dark-theme .briefing-card {
+            background: linear-gradient(135deg, #0f2744 0%, #17365d 100%);
+            border-color: #0369a1;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
         .briefing-header {
             display: flex;
@@ -158,6 +186,9 @@
             align-items: center;
             gap: 8px;
         }
+        body.dark-theme .briefing-title {
+            color: #38bdf8;
+        }
         .briefing-date {
             font-size: 0.8rem;
             color: #0284c7;
@@ -167,10 +198,18 @@
             border: 1px solid #bae6fd;
             font-weight: 600;
         }
+        body.dark-theme .briefing-date {
+            background: #0f172a;
+            border-color: #0369a1;
+            color: #38bdf8;
+        }
         .briefing-content {
             font-size: 0.92rem;
             line-height: 1.65;
             color: #0c4a6e;
+        }
+        body.dark-theme .briefing-content {
+            color: #bae6fd;
         }
         .briefing-content p {
             margin: 4px 0;
@@ -184,8 +223,11 @@
             border-radius: 6px;
             transition: background 0.2s;
         }
+        body.dark-theme .briefing-refresh {
+            color: #38bdf8;
+        }
         .briefing-refresh:hover {
-            background: #e0f2fe;
+            background: rgba(2, 132, 199, 0.15);
         }
 
         /* 3. 환율 요약 박스 */
@@ -234,8 +276,13 @@
             gap: 8px;
             margin-bottom: 16px;
         }
+        body.dark-theme .period-info-bar {
+            background: #1e293b;
+            border-color: #3b82f6;
+            color: #93c5fd;
+        }
         .period-info-bar .highlight-badge {
-            background: #2563eb;
+            background: var(--primary);
             color: white;
             font-weight: 700;
             padding: 3px 10px;
@@ -250,7 +297,7 @@
             flex-wrap: wrap;
         }
         .tab-btn {
-            background: #f8fafc;
+            background: var(--bg);
             border: 1px solid var(--border);
             padding: 7px 14px;
             border-radius: 8px;
@@ -261,7 +308,7 @@
             transition: all 0.2s ease;
         }
         .tab-btn:hover {
-            background: #f1f5f9;
+            background: var(--border);
             color: var(--text-main);
         }
         .tab-btn.active {
@@ -274,20 +321,20 @@
         /* 환율 카드 그리드 */
         .rates-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
             gap: 16px;
         }
         .rate-card {
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 18px;
-            background: #ffffff;
+            background: var(--card-bg);
             transition: transform 0.15s ease, box-shadow 0.15s ease;
             position: relative;
         }
         .rate-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
         .rate-card.usd { border-top: 4px solid var(--usd-color); }
         .rate-card.eur { border-top: 4px solid var(--eur-color); }
@@ -305,14 +352,14 @@
             font-size: 0.75rem;
             color: var(--text-sub);
             font-weight: normal;
-            background: #f1f5f9;
+            background: var(--bg);
             padding: 2px 8px;
             border-radius: 10px;
         }
 
         /* 최신 환율 & 등락률 메인 섹션 */
         .latest-rate-section {
-            background: #f8fafc;
+            background: var(--bg);
             border-radius: 8px;
             padding: 12px 14px;
             margin-bottom: 14px;
@@ -328,7 +375,7 @@
         .latest-rate-val {
             font-size: 1.35rem;
             font-weight: 800;
-            color: #0f172a;
+            color: var(--text-main);
             display: flex;
             align-items: baseline;
             gap: 3px;
@@ -346,12 +393,12 @@
         .delta-badge.up {
             color: var(--up-color);
             background: var(--up-bg);
-            border: 1px solid #fecaca;
+            border: 1px solid var(--up-color);
         }
         .delta-badge.down {
             color: var(--down-color);
             background: var(--down-bg);
-            border: 1px solid #bfdbfe;
+            border: 1px solid var(--down-color);
         }
         .delta-badge.same {
             color: var(--same-color);
@@ -363,18 +410,18 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 7px;
+            margin-bottom: 6px;
             font-size: 0.88rem;
             white-space: nowrap;
         }
         .stat-label {
             color: var(--text-sub);
             white-space: nowrap;
-            font-size: 0.86rem;
+            font-size: 0.85rem;
         }
         .stat-value {
             font-weight: 600;
-            color: #0f172a;
+            color: var(--text-main);
             white-space: nowrap;
             text-align: right;
             display: inline-flex;
@@ -387,7 +434,7 @@
         }
         .stat-value .sub-unit {
             font-size: 0.72rem;
-            color: #64748b;
+            color: var(--text-sub);
             font-weight: 500;
         }
 
@@ -483,6 +530,8 @@
             font-size: 1rem;
             font-weight: 600;
             outline: none;
+            background: var(--bg);
+            color: var(--text-main);
             transition: border-color 0.2s;
         }
         .calc-input-row input:focus {
@@ -494,12 +543,13 @@
             border: 1px solid var(--border);
             font-size: 0.95rem;
             font-weight: 600;
-            background: #f8fafc;
+            background: var(--bg);
+            color: var(--text-main);
             cursor: pointer;
             outline: none;
         }
         .calc-swap-btn {
-            background: #f1f5f9;
+            background: var(--bg);
             border: 1px solid var(--border);
             border-radius: 50%;
             width: 40px;
@@ -511,6 +561,7 @@
             margin-top: 18px;
             transition: all 0.2s ease;
             font-size: 1.1rem;
+            color: var(--text-main);
         }
         .calc-swap-btn:hover {
             background: var(--primary);
@@ -524,7 +575,7 @@
             justify-content: space-between;
             margin-bottom: 14px;
             padding: 10px 14px;
-            background: #f8fafc;
+            background: var(--bg);
             border-radius: 8px;
             border: 1px solid var(--border);
             flex-wrap: wrap;
@@ -540,7 +591,8 @@
             border-radius: 6px;
             border: 1px solid var(--border);
             font-size: 0.85rem;
-            background: white;
+            background: var(--card-bg);
+            color: var(--text-main);
             cursor: pointer;
             font-weight: 600;
         }
@@ -557,6 +609,10 @@
             flex-wrap: wrap;
             gap: 12px;
         }
+        body.dark-theme .calc-result-card {
+            background: #172554;
+            border-color: #1e3a8a;
+        }
         .calc-result-main {
             display: flex;
             flex-direction: column;
@@ -566,10 +622,16 @@
             font-size: 0.84rem;
             color: #1e40af;
         }
+        body.dark-theme .calc-result-sub {
+            color: #93c5fd;
+        }
         .calc-result-amount {
             font-size: 1.55rem;
             font-weight: 800;
             color: #1d4ed8;
+        }
+        body.dark-theme .calc-result-amount {
+            color: #60a5fa;
         }
         .calc-saved-badge {
             background: #dcfce7;
@@ -582,6 +644,11 @@
             display: inline-flex;
             align-items: center;
             gap: 4px;
+        }
+        body.dark-theme .calc-saved-badge {
+            background: #052e16;
+            color: #4ade80;
+            border-color: #166534;
         }
 
         /* 6. AI 채팅 박스 */
@@ -636,8 +703,8 @@
         }
         .message.ai {
             align-self: flex-start;
-            background-color: #f8fafc;
-            color: #1e293b;
+            background-color: var(--bg);
+            color: var(--text-main);
             border-bottom-left-radius: 4px;
             border: 1px solid var(--border);
         }
@@ -647,37 +714,34 @@
             width: 100%;
             border-collapse: collapse;
             margin: 12px 0;
-            background: white;
+            background: var(--card-bg);
             border-radius: 8px;
             overflow: hidden;
             box-shadow: 0 1px 3px rgba(0,0,0,0.04);
             font-size: 0.88rem;
         }
         .message.ai th, .message.ai td {
-            border: 1px solid #e2e8f0;
+            border: 1px solid var(--border);
             padding: 8px 12px;
             text-align: left;
         }
         .message.ai th {
-            background-color: #f1f5f9;
+            background-color: rgba(37, 99, 235, 0.08);
             font-weight: 700;
-            color: #0f172a;
-        }
-        .message.ai tr:nth-child(even) {
-            background-color: #fafbfc;
+            color: var(--text-main);
         }
         .message.ai tr:hover {
-            background-color: #f1f5f9;
+            background-color: rgba(148, 163, 184, 0.08);
         }
         .message.ai p { margin: 6px 0; }
         .message.ai ul, .message.ai ol { margin: 6px 0; padding-left: 20px; }
         .message.ai blockquote {
             border-left: 4px solid var(--primary);
-            background: #eff6ff;
+            background: rgba(37, 99, 235, 0.08);
             margin: 8px 0;
             padding: 8px 12px;
             border-radius: 0 6px 6px 0;
-            color: #1e40af;
+            color: var(--primary);
         }
         .message.loading {
             color: var(--text-sub);
@@ -698,9 +762,9 @@
             white-space: nowrap;
         }
         .chip {
-            background: #eff6ff;
+            background: var(--bg);
             color: var(--primary);
-            border: 1px solid #bfdbfe;
+            border: 1px solid var(--border);
             padding: 6px 14px;
             border-radius: 20px;
             font-size: 0.82rem;
@@ -711,6 +775,7 @@
         .chip:hover {
             background: var(--primary);
             color: white;
+            border-color: var(--primary);
         }
 
         /* 입력창 영역 */
@@ -725,6 +790,8 @@
             border-radius: 8px;
             outline: none;
             font-size: 0.95rem;
+            background: var(--bg);
+            color: var(--text-main);
             transition: border-color 0.2s;
         }
         .input-area input:focus {
@@ -769,9 +836,9 @@
             width: 330px;
             max-width: 85vw;
             height: 100%;
-            background: #ffffff;
+            background: var(--card-bg);
             z-index: 1001;
-            box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+            box-shadow: 4px 0 20px rgba(0,0,0,0.2);
             transform: translateX(-100%);
             transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             display: flex;
@@ -805,7 +872,7 @@
             border-radius: 6px;
         }
         .sidebar-close-btn:hover {
-            background: #f1f5f9;
+            background: var(--bg);
             color: var(--text-main);
         }
         .sidebar-new-btn {
@@ -845,12 +912,12 @@
             transition: all 0.15s ease;
         }
         .conv-item:hover {
-            background: #f8fafc;
+            background: var(--bg);
             border-color: var(--border);
         }
         .conv-item.active {
-            background: #eff6ff;
-            border-color: #bfdbfe;
+            background: rgba(37, 99, 235, 0.12);
+            border-color: var(--primary);
         }
         .conv-item-left {
             display: flex;
@@ -885,7 +952,7 @@
         }
         .conv-delete-btn:hover {
             color: #ef4444;
-            background: #fee2e2;
+            background: rgba(239, 68, 68, 0.15);
         }
 
         /* 토스트 알림 */
@@ -898,7 +965,7 @@
             padding: 12px 20px;
             border-radius: 8px;
             font-size: 0.9rem;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
             display: flex;
             align-items: center;
             gap: 8px;
@@ -907,6 +974,11 @@
             transform: translateY(20px);
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             pointer-events: none;
+        }
+        body.dark-theme .toast {
+            background: #334155;
+            color: #f8fafc;
+            border: 1px solid #475569;
         }
         .toast.show {
             opacity: 1;
@@ -937,12 +1009,15 @@
     <div class="toast" id="toast"></div>
 
     <div class="container">
-        <!-- 1. 헤더 -->
+        <!-- 1. 헤더 (다크 모드 토글 & 멀티 컨트롤) -->
         <div class="header">
             <div class="header-title-area">
                 <h1>💱 외환(FX) 분석 AI 비서</h1>
             </div>
             <div class="header-actions">
+                <button class="btn btn-theme-toggle" id="theme-btn" onclick="toggleDarkMode()" title="다크/라이트 모드 전환 (보너스 과제)">
+                    <span id="theme-icon">🌙</span> <span id="theme-text">다크 모드</span>
+                </button>
                 <button class="btn" onclick="toggleSidebar(true)" title="대화 기록 열기">
                     💬 대화 기록
                 </button>
@@ -950,10 +1025,13 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
                     </svg>
-                    <span>최신 환율 동기화</span>
+                    <span>최신 동기화</span>
                 </button>
-                <button class="btn" onclick="downloadCsv()" title="현재 기간 환율 데이터 CSV(Excel) 다운로드">
-                    📥 CSV 다운로드
+                <button class="btn" onclick="downloadCsv()" title="현재 기간 환율 데이터 CSV (Excel) 다운로드">
+                    📥 CSV
+                </button>
+                <button class="btn" onclick="downloadJson()" title="현재 기간 환율 데이터 JSON 다운로드 (보너스 과제)">
+                    📋 JSON
                 </button>
                 <select class="server-select" id="api-server" onchange="handleServerChange()">
                     <option value="https://fx-ai-backend.onrender.com/api">클라우드 (Render 실서버)</option>
@@ -978,7 +1056,7 @@
             </div>
         </div>
 
-        <!-- 3. 환율 요약 데이터 표시 영역 (추천 기능 1번 등락폭 연동) -->
+        <!-- 3. 환율 요약 데이터 표시 영역 (추천 기능 1번 등락폭 & 보너스 과제 통계 지표 연동) -->
         <div class="summary-box">
             <div class="summary-header">
                 <h2>📊 현재 환율 요약 데이터</h2>
@@ -1001,9 +1079,9 @@
                 <div class="highlight-badge" id="period-badge">최근 1개월 기준</div>
             </div>
 
-            <!-- 통화별 카드 그리드 (최신 환율, 전일비 등락 뱃지, 기간 통계) -->
+            <!-- 통화별 카드 그리드 (최신 환율, 전일비 등락 뱃지, 표준편차 & 변동폭 지표) -->
             <div class="rates-grid" id="rates-grid">
-                <div style="grid-column: 1 / -1; text-align: center; color: #64748b; padding: 25px;">
+                <div style="grid-column: 1 / -1; text-align: center; color: var(--text-sub); padding: 25px;">
                     환율 통계 데이터를 불러오는 중입니다...
                 </div>
             </div>
@@ -1049,7 +1127,7 @@
                 <div class="calc-input-group">
                     <label>받을 통화 (To)</label>
                     <div class="calc-input-row">
-                        <input type="text" id="calc-result-preview" readonly placeholder="자동 계산" style="background:#f8fafc; color:#1e40af;">
+                        <input type="text" id="calc-result-preview" readonly placeholder="자동 계산" style="color:var(--primary); font-weight:700;">
                         <select id="calc-to-curr" onchange="runExchangeCalc()">
                             <option value="KRW" selected>KRW (원화)</option>
                             <option value="USD">USD (달러)</option>
@@ -1095,7 +1173,7 @@
             <div class="chat-history" id="chat-history">
                 <div class="message ai">안녕하세요! 외환 전문 AI 비서입니다. 📈
 궁금하신 기간과 통화를 자유롭게 질문해 보세요!
-예: <strong>"최근 한달간의 엔화 환율 평균 알려줘"</strong>, <strong>"100만원 환전하면 엔화로 얼마야?"</strong></div>
+예: <strong>"최근 한달간의 엔화 환율 평균 알려줘"</strong>, <strong>"100만원 환전하면 엔화로 얼마야?"</strong>, <strong>"달러 변동성과 표준편차 분석해줘"</strong></div>
             </div>
 
             <!-- 추천 질문 칩 -->
@@ -1103,8 +1181,8 @@
                 <div class="chip" onclick="askQuestion('최근 한달간의 엔화 환율 평균 알려줘')">💴 최근 한달 엔화 평균</div>
                 <div class="chip" onclick="askQuestion('1000달러를 원화로 환전하면 얼마야? 우대율 80%로 계산해줘')">💵 1000달러 원화 환전 계산</div>
                 <div class="chip" onclick="askQuestion('100만원으로 엔화 환전하면 몇 엔이야?')">🧮 100만원 엔화 환전</div>
+                <div class="chip" onclick="askQuestion('달러, 유로, 엔화의 최근 30일간 변동성과 표준편차 비교 분석해줘')">📊 외환 변동성 심층 분석</div>
                 <div class="chip" onclick="askQuestion('최근 1주일간 달러 환율 최고/최저가는?')">💵 최근 1주일 달러 변동</div>
-                <div class="chip" onclick="askQuestion('최근 3개월간 유로 환율 흐름과 평균 분석해줘')">💶 최근 3개월 유로 분석</div>
             </div>
 
             <!-- 메시지 입력창 -->
@@ -1132,6 +1210,42 @@
 
         function getBaseUrl() {
             return serverSelect.value;
+        }
+
+        // ==========================================
+        // 0. 다크 모드 토글 (보너스 과제)
+        // ==========================================
+        function initTheme() {
+            const savedTheme = localStorage.getItem('fx-theme') || 'light';
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-theme');
+                updateThemeButton(true);
+            } else {
+                document.body.classList.remove('dark-theme');
+                updateThemeButton(false);
+            }
+        }
+
+        function toggleDarkMode() {
+            const isDark = document.body.classList.toggle('dark-theme');
+            localStorage.setItem('fx-theme', isDark ? 'dark' : 'light');
+            updateThemeButton(isDark);
+            showToast(isDark ? "🌙 다크 모드로 전환되었습니다." : "☀️ 라이트 모드로 전환되었습니다.");
+            if (fxChartInstance) {
+                renderChartTheme(isDark);
+            }
+        }
+
+        function updateThemeButton(isDark) {
+            const icon = document.getElementById('theme-icon');
+            const text = document.getElementById('theme-text');
+            if (isDark) {
+                icon.innerText = "☀️";
+                text.innerText = "라이트 모드";
+            } else {
+                icon.innerText = "🌙";
+                text.innerText = "다크 모드";
+            }
         }
 
         function handleServerChange() {
@@ -1175,7 +1289,7 @@
         }
 
         // ==========================================
-        // 1. 환율 요약 데이터 (전일비 등락 뱃지 완벽 지원)
+        // 1. 환율 요약 데이터 (전일비 등락 뱃지 & 확장 통계 지표)
         // ==========================================
         async function fetchSummary(period = '30d') {
             const grid = document.getElementById('rates-grid');
@@ -1236,6 +1350,11 @@
                     const pctVal = item['등락률'];
                     const dir = item['등락구분'] || 'same';
 
+                    // 보너스 과제 확장 지표 (표준편차, 가격변동폭)
+                    const stdVal = item['표준편차'] !== undefined ? item['표준편차'] : null;
+                    const gapVal = item['가격변동폭'] !== undefined ? item['가격변동폭'] : null;
+                    const cvVal = item['변동계수'] || '';
+
                     const unitHtml = c.subNote 
                         ? `${c.unit} <span class="sub-unit">${c.subNote}</span>` 
                         : c.unit;
@@ -1265,7 +1384,7 @@
                                     <div class="latest-rate-label">최신 환율 (${item['최신 기준일'] || '오늘'})</div>
                                     <div class="latest-rate-val">
                                         ${formatNum(latestVal)}
-                                        <span style="font-size:0.85rem; font-weight:600; color:#64748b;">${c.unit}</span>
+                                        <span style="font-size:0.85rem; font-weight:600; color:var(--text-sub);">${c.unit}</span>
                                     </div>
                                 </div>
                                 <div>${deltaBadgeHtml}</div>
@@ -1276,12 +1395,16 @@
                                 <span class="stat-value highlight">${formatNum(avgVal)} ${unitHtml}</span>
                             </div>
                             <div class="stat-row">
-                                <span class="stat-label">최저 환율</span>
-                                <span class="stat-value">${formatNum(minVal)} ${unitHtml}</span>
+                                <span class="stat-label">최저 / 최고 환율</span>
+                                <span class="stat-value">${formatNum(minVal)} ~ ${formatNum(maxVal)} ${c.unit}</span>
                             </div>
                             <div class="stat-row">
-                                <span class="stat-label">최고 환율</span>
-                                <span class="stat-value">${formatNum(maxVal)} ${unitHtml}</span>
+                                <span class="stat-label">가격 변동폭 (Gap)</span>
+                                <span class="stat-value">${gapVal !== null ? formatNum(gapVal) : '-'} ${c.unit}</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">변동성 (표준편차)</span>
+                                <span class="stat-value" style="color:var(--primary);">±${stdVal !== null ? formatNum(stdVal) : '-'} ${c.unit}</span>
                             </div>
                         </div>
                     `;
@@ -1295,7 +1418,7 @@
                 grid.innerHTML = `
                     <div style="grid-column: 1 / -1; text-align: center; color: #dc2626; padding: 20px;">
                         ⚠️ 요약 데이터를 불러오지 못했습니다. 백엔드 서버 상태를 확인해 주세요.<br>
-                        <small style="color: #64748b;">(현재 서버: ${getBaseUrl()})</small>
+                        <small style="color: var(--text-sub);">(현재 서버: ${getBaseUrl()})</small>
                     </div>
                 `;
             }
@@ -1337,7 +1460,7 @@
             const dateSpan = document.getElementById('briefing-date');
 
             if (forceRefresh) {
-                contentDiv.innerHTML = '<span style="color:#0284c7;">🤖 최신 지표를 바탕으로 AI 애널리스트 브리핑을 갱신 중입니다...</span>';
+                contentDiv.innerHTML = '<span style="color:var(--primary);">🤖 최신 지표를 바탕으로 AI 애널리스트 브리핑을 갱신 중입니다...</span>';
             }
 
             try {
@@ -1536,16 +1659,22 @@
         }
 
         // ==========================================
-        // 6. CSV 다운로드 (추천 기능 6번)
+        // 6. 데이터 다운로드 (CSV + JSON 보너스 과제)
         // ==========================================
         function downloadCsv() {
             const url = `${getBaseUrl()}/data/export/csv?period=${currentPeriod}`;
-            showToast(`📥 ${currentPeriod} 기간 환율 데이터를 CSV로 다운로드합니다...`);
+            showToast(`📥 ${currentPeriod} 기간 환율 데이터를 CSV(Excel)로 다운로드합니다...`);
+            window.location.href = url;
+        }
+
+        function downloadJson() {
+            const url = `${getBaseUrl()}/data/export/json?period=${currentPeriod}`;
+            showToast(`📋 ${currentPeriod} 기간 환율 데이터를 JSON으로 다운로드합니다...`);
             window.location.href = url;
         }
 
         // ==========================================
-        // 7. 차트 렌더링
+        // 7. 차트 렌더링 & 테마 동적 반응
         // ==========================================
         async function fetchChart(period = '30d') {
             try {
@@ -1619,6 +1748,17 @@
             }
         }
 
+        function renderChartTheme(isDark) {
+            if (!fxChartInstance) return;
+            const gridColor = isDark ? '#334155' : '#f1f5f9';
+            const tickColor = isDark ? '#94a3b8' : '#64748b';
+            
+            fxChartInstance.options.scales.x.ticks.color = tickColor;
+            fxChartInstance.options.scales.y.ticks.color = tickColor;
+            fxChartInstance.options.scales.y.grid.color = gridColor;
+            fxChartInstance.update();
+        }
+
         function renderChart(labels, series) {
             const canvas = document.getElementById('fxChart');
             if (!canvas) return;
@@ -1628,6 +1768,9 @@
                 fxChartInstance.destroy();
             }
 
+            const isDark = document.body.classList.contains('dark-theme');
+            const gridColor = isDark ? '#334155' : '#f1f5f9';
+            const tickColor = isDark ? '#94a3b8' : '#64748b';
             const pointRadius = labels.length > 50 ? 0 : (labels.length > 20 ? 2 : 4);
 
             fxChartInstance = new Chart(ctx, {
@@ -1683,7 +1826,8 @@
                             labels: {
                                 usePointStyle: true,
                                 boxWidth: 8,
-                                font: { size: 12, weight: '600' }
+                                font: { size: 12, weight: '600' },
+                                color: tickColor
                             }
                         },
                         tooltip: {
@@ -1702,16 +1846,18 @@
                                 maxRotation: 0,
                                 autoSkip: true,
                                 maxTicksLimit: 8,
-                                font: { size: 11 }
+                                font: { size: 11 },
+                                color: tickColor
                             }
                         },
                         y: {
-                            grid: { color: '#f1f5f9' },
+                            grid: { color: gridColor },
                             ticks: {
                                 callback: function(val) {
                                     return val.toLocaleString() + '원';
                                 },
-                                font: { size: 11 }
+                                font: { size: 11 },
+                                color: tickColor
                             }
                         }
                     }
@@ -1849,6 +1995,7 @@
         }
 
         // 초기 실행
+        initTheme();
         loadDashboard('30d');
         fetchMarketBriefing();
     </script>
