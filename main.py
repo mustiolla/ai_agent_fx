@@ -11,10 +11,13 @@ from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 
 from firebase_config import get_firestore_db
 
+# ==============================================================================
+# [Layer 1: Data Access / Persistence Layer] - In-memory Cache & Database Client
+# ==============================================================================
 # 1. 환경 변수 로드 및 Firebase 초기화
 load_dotenv()
 db = get_firestore_db()
@@ -59,6 +62,9 @@ def invalidate_cache():
     _briefing_cache["text"] = None
 
 
+# ==============================================================================
+# [Layer 2: Application Entrypoint & CORS Configuration]
+# ==============================================================================
 # 3. FastAPI 앱 초기화
 app = FastAPI(
     title="환율 AI 비서 API",
@@ -75,17 +81,69 @@ app.add_middleware(
 )
 
 
+# ==============================================================================
+# [Layer 3: Schema / Model Layer] - Pydantic Request & Response Validation Models
+# ==============================================================================
 # 4. Pydantic 모델 정의
 class RateData(BaseModel):
-    date: str
-    value: float
-    memo: Optional[str] = None
-    currency: str
+    """환율 데이터 등록 및 수정을 위한 검증 스키마"""
+    date: str = Field(
+        ...,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="환율 기준 일자 (YYYY-MM-DD 형식)",
+        examples=["2025-02-14"]
+    )
+    value: float = Field(
+        ...,
+        gt=0,
+        description="환율 종가 (원화 기준, 양수 값이어야 함)",
+        examples=[1442.50]
+    )
+    currency: str = Field(
+        ...,
+        description="통화 코드 (USD: 미국 달러, EUR: 유로, JPY: 일본 엔화 100엔당)",
+        examples=["USD"]
+    )
+    memo: Optional[str] = Field(
+        None,
+        description="환율 데이터 관련 비고 또는 메모",
+        examples=["수동 등록 환율 종가"]
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "date": "2025-02-14",
+                "value": 1442.50,
+                "currency": "USD",
+                "memo": "정규 장마감 환율"
+            }
+        }
+    )
 
 
 class ChatRequest(BaseModel):
-    message: str
-    conversation_id: Optional[str] = None
+    """AI 상담 챗봇 요청 스키마"""
+    message: str = Field(
+        ...,
+        min_length=1,
+        description="사용자의 자연어 질문 또는 환전/통계 요청 메시지",
+        examples=["1000달러를 원화로 환전하면 얼마야? 우대율 80% 적용해줘"]
+    )
+    conversation_id: Optional[str] = Field(
+        None,
+        description="기존 대화 세션 ID (새 대화 시작 시 생략 또는 null)",
+        examples=["kP3j9L0sXqW2mY1z"]
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "message": "최근 1개월 달러 환율 변동성과 최고/최저가 알려줘",
+                "conversation_id": None
+            }
+        }
+    )
 
 
 @app.get("/")
@@ -585,10 +643,11 @@ def compute_exchange(
     amount: float,
     from_currency: str,
     to_currency: str,
-    preferential_rate: float = 0.0  # 0.0 ~ 1.0 (예: 0.8 = 80% 우대)
+    preferential_rate: float = 1.0,  # 0.0 ~ 1.0 (기본값: 100% 우대, 수수료 0원)
+    trade_type: str = "buy"  # "buy": 외화 살 때 (외화 수령 시 은행에 지불할 원화 계산), "sell": 외화 팔 때 (외화 지급 시 받을 원화)
 ) -> Dict[str, Any]:
     """
-    최신 환율을 기준으로 환전 금액, 매매기준율 환산액, 우대율 적용 수수료 절감액을 계산합니다.
+    최신 환율을 기준으로 환전 금액, 매매기준율 환산액, 우대율 적용 수수료 및 실수령/지불액을 계산합니다.
     """
     from_curr = from_currency.upper().strip()
     to_curr = to_currency.upper().strip()
@@ -602,9 +661,11 @@ def compute_exchange(
             "amount": amount,
             "from_currency": from_curr,
             "to_currency": to_curr,
+            "trade_type": trade_type,
             "converted_amount": amount,
             "preferential_rate": preferential_rate,
             "saved_amount": 0.0,
+            "fee_deducted": 0.0,
             "rate_date": datetime.now().strftime("%Y-%m-%d"),
             "formula": f"동일 통화 환전 (1 {from_curr} = 1 {to_curr})"
         }
@@ -615,57 +676,114 @@ def compute_exchange(
     rate_date = summary.get("period", {}).get("end_date", datetime.now().strftime("%Y-%m-%d"))
 
     # 1단위 외화의 KRW 매매기준율 환산가 (JPY는 1엔당 기준)
+    usd_latest = float(rates_info.get("USD", {}).get("최신 환율") or 1370.0)
+    eur_latest = float(rates_info.get("EUR", {}).get("최신 환율") or 1520.0)
+    jpy_latest = float(rates_info.get("JPY", {}).get("최신 환율") or 880.0)  # 100엔당 환율
+
     krw_per_unit = {
         "KRW": 1.0,
-        "USD": float(rates_info.get("USD", {}).get("최신 환율") or 1370.0),
-        "EUR": float(rates_info.get("EUR", {}).get("최신 환율") or 1520.0),
-        "JPY": float(rates_info.get("JPY", {}).get("최신 환율") or 880.0) / 100.0,  # 1엔당
+        "USD": usd_latest,
+        "EUR": eur_latest,
+        "JPY": jpy_latest / 100.0,  # 1엔당 실질 환율
     }
+
+    # 한국 시장 기준 환율 표기 (USD/EUR은 1단위, JPY는 100엔 단위)
+    base_rate_display_map = {
+        "USD": f"1 USD = {usd_latest:,.2f} KRW",
+        "EUR": f"1 EUR = {eur_latest:,.2f} KRW",
+        "JPY": f"100 JPY = {jpy_latest:,.2f} KRW (1 JPY = {jpy_latest/100:.4f} KRW)",
+        "KRW": "1 KRW = 1 KRW"
+    }
+
+    ref_curr = from_curr if to_curr == "KRW" else (to_curr if from_curr == "KRW" else from_curr)
+    base_rate_display = base_rate_display_map.get(ref_curr, "")
 
     # 은행 기본 환전 스프레드율 (통상 1.75%)
     base_spread = 0.0175
-    effective_spread = base_spread * (1.0 - min(max(preferential_rate, 0.0), 1.0))
+    clamped_pref = min(max(preferential_rate, 0.0), 1.0)
+    effective_spread = base_spread * (1.0 - clamped_pref)
 
     # 1. 출발 통화 금액을 KRW 매매기준율로 변환
     base_krw = amount * krw_per_unit[from_curr]
 
     # 2. 목표 통화로 변환
-    if to_curr == "KRW":
-        regular_krw = base_krw * (1.0 - base_spread)
-        preferential_krw = base_krw * (1.0 - effective_spread)
-        converted_amount = round(preferential_krw, 2)
+    # [Case A] 외화 살 때 (trade_type == 'buy'): 외화(from_curr)를 수령하기 위해 지불할 원화(to_curr)
+    if trade_type == "buy" and to_curr == "KRW":
         market_standard = round(base_krw, 2)
-        saved_amount = round(preferential_krw - regular_krw, 2)
-        applied_rate = round(krw_per_unit[from_curr] * (1.0 - effective_spread), 2)
-        formula = f"1 {from_curr} 당 약 {applied_rate} KRW 적용 (우대율 {int(preferential_rate * 100)}%)"
+        if clamped_pref >= 1.0:
+            converted_amount = market_standard
+            applied_rate = round(krw_per_unit[from_curr], 4)
+            formula = f"⚡ 최신 매매기준율 100% 적용 | {amount:,.2f} {from_curr} 수령 시 지불할 원화: {converted_amount:,.2f} KRW (수수료 0원)"
+        else:
+            preferential_krw = base_krw * (1.0 + effective_spread)
+            converted_amount = round(preferential_krw, 2)
+            applied_rate = round(krw_per_unit[from_curr] * (1.0 + effective_spread), 4)
+            fee_amount = round(converted_amount - market_standard, 2)
+            formula = f"기준환율: {base_rate_display} | 우대율 {int(clamped_pref * 100)}% 적용 | 지불할 원화: {converted_amount:,.2f} KRW (수수료 +{fee_amount:,.2f}원)"
+
+        saved_amount = round((base_krw * (1.0 + base_spread)) - converted_amount, 2)
+        fee_deducted = round(max(0, converted_amount - market_standard), 2)
+
+    # [Case B] 외화 팔 때 (trade_type == 'sell'): 외화(from_curr)를 주고 돌려받을 원화(to_curr)
+    elif trade_type == "sell" and to_curr == "KRW":
+        market_standard = round(base_krw, 2)
+        if clamped_pref >= 1.0:
+            converted_amount = market_standard
+            applied_rate = round(krw_per_unit[from_curr], 4)
+            formula = f"⚡ 최신 매매기준율 100% 적용 | {amount:,.2f} {from_curr} 판매 시 수령할 원화: {converted_amount:,.2f} KRW (수수료 0원)"
+        else:
+            regular_krw = base_krw * (1.0 - base_spread)
+            preferential_krw = base_krw * (1.0 - effective_spread)
+            converted_amount = round(preferential_krw, 2)
+            applied_rate = round(krw_per_unit[from_curr] * (1.0 - effective_spread), 4)
+            formula = f"기준환율: {base_rate_display} | 우대율 {int(clamped_pref * 100)}% 적용 | 수령할 원화: {converted_amount:,.2f} KRW"
+
+        saved_amount = round(converted_amount - (base_krw * (1.0 - base_spread)), 2)
+        fee_deducted = round(max(0, market_standard - converted_amount), 2)
 
     elif from_curr == "KRW":
-        unit_price_regular = krw_per_unit[to_curr] * (1.0 + base_spread)
-        unit_price_pref = krw_per_unit[to_curr] * (1.0 + effective_spread)
-        converted_amount = round(amount / unit_price_pref, 2)
         market_standard = round(amount / krw_per_unit[to_curr], 2)
-        saved_amount = round((amount / unit_price_pref) - (amount / unit_price_regular), 2)
-        applied_rate = round(unit_price_pref, 2)
-        formula = f"1 {to_curr} 당 약 {applied_rate} KRW 적용 (우대율 {int(preferential_rate * 100)}%)"
+        if clamped_pref >= 1.0:
+            converted_amount = market_standard
+            applied_rate = round(krw_per_unit[to_curr], 2)
+            formula = f"⚡ 최신 매매기준율 100% 직접 적용 (수수료 0원) | {base_rate_display}"
+        else:
+            unit_price_pref = krw_per_unit[to_curr] * (1.0 + effective_spread)
+            converted_amount = round(amount / unit_price_pref, 2)
+            applied_rate = round(unit_price_pref, 2)
+            formula = f"기준환율: {base_rate_display} | 우대율 {int(clamped_pref * 100)}% 적용 (1 {to_curr} 당 약 {applied_rate:.2f} KRW)"
+
+        saved_amount = round(converted_amount - (amount / (krw_per_unit[to_curr] * (1.0 + base_spread))), 2)
+        fee_deducted = round(abs(market_standard - converted_amount), 2)
 
     else:
         market_standard = round(base_krw / krw_per_unit[to_curr], 2)
-        converted_amount = round(market_standard * (1.0 - effective_spread), 2)
-        saved_amount = round(market_standard * (base_spread - effective_spread), 2)
-        applied_rate = round(krw_per_unit[from_curr] / krw_per_unit[to_curr], 4)
-        formula = f"1 {from_curr} ≈ {applied_rate} {to_curr} (크로스 환율, 우대율 {int(preferential_rate * 100)}%)"
+        if clamped_pref >= 1.0:
+            converted_amount = market_standard
+            applied_rate = round(krw_per_unit[from_curr] / krw_per_unit[to_curr], 4)
+            formula = f"⚡ 최신 크로스 매매기준율 100% 적용 | 1 {from_curr} ≈ {applied_rate:.4f} {to_curr}"
+        else:
+            converted_amount = round(market_standard * (1.0 - effective_spread), 2)
+            applied_rate = round(krw_per_unit[from_curr] / krw_per_unit[to_curr] * (1.0 - effective_spread), 4)
+            formula = f"최신 크로스 환율 (우대율 {int(clamped_pref * 100)}%): 1 {from_curr} ≈ {applied_rate:.4f} {to_curr}"
+
+        saved_amount = round(converted_amount - (market_standard * (1.0 - base_spread)), 2)
+        fee_deducted = round(abs(market_standard - converted_amount), 2)
 
     return {
         "status": "success",
         "amount": amount,
         "from_currency": from_curr,
         "to_currency": to_curr,
-        "preferential_rate": preferential_rate,
-        "preferential_percent": f"{int(preferential_rate * 100)}%",
+        "trade_type": trade_type,
+        "preferential_rate": clamped_pref,
+        "preferential_percent": f"{int(clamped_pref * 100)}%",
         "converted_amount": converted_amount,
         "market_standard_amount": market_standard,
-        "saved_amount": saved_amount,
-        "base_rate": round(krw_per_unit[from_curr] if to_curr == "KRW" else krw_per_unit[to_curr], 2),
+        "saved_amount": max(saved_amount, 0.0),
+        "fee_deducted": fee_deducted,
+        "base_rate": round(krw_per_unit[from_curr] if to_curr == "KRW" else krw_per_unit[to_curr], 4),
+        "base_rate_display": base_rate_display,
         "rate_date": rate_date,
         "formula": formula
     }
@@ -677,14 +795,16 @@ def get_exchange_calculation(
     amount: float,
     from_currency: str = "USD",
     to_currency: str = "KRW",
-    preferential_rate: float = 0.0
+    preferential_rate: float = 1.0,
+    trade_type: str = "buy"
 ):
     try:
         return compute_exchange(
             amount=amount,
             from_currency=from_currency,
             to_currency=to_currency,
-            preferential_rate=preferential_rate
+            preferential_rate=preferential_rate,
+            trade_type=trade_type
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

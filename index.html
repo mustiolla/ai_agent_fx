@@ -1126,19 +1126,29 @@
         <div class="calc-box">
             <div class="calc-header">
                 <h3>🧮 실시간 환전 시뮬레이터</h3>
-                <span class="chart-hint">최신 환율과 은행 우대율을 반영하여 실제 수령액을 즉시 계산합니다.</span>
+                <span class="chart-hint">최신 환율과 은행 우대율을 반영하여 실제 지불액 및 수령액을 즉시 계산합니다.</span>
+            </div>
+
+            <!-- 거래 방향 모드 선택 탭 (외화 살 때: 지불할 금액 / 외화 팔 때: 받을 금액) -->
+            <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+                <button type="button" id="btn-mode-buy" onclick="setTradeMode('buy')" style="padding:7px 16px; font-weight:700; border-radius:8px; font-size:0.88rem; cursor:pointer; background:var(--primary); color:#ffffff; border:1px solid var(--primary); transition:all 0.2s;">
+                    💵 외화 살 때 (내가 받을 외화 ➔ 은행에 지불할 금액)
+                </button>
+                <button type="button" id="btn-mode-sell" onclick="setTradeMode('sell')" style="padding:7px 16px; font-weight:600; border-radius:8px; font-size:0.88rem; cursor:pointer; background:var(--bg); color:var(--text-sub); border:1px solid var(--border); transition:all 0.2s;">
+                    💴 외화 팔 때 (내가 줄 외화 ➔ 은행에서 받을 금액)
+                </button>
             </div>
 
             <div class="calc-grid">
-                <!-- 출발 통화 -->
+                <!-- 출발 통화: 내가 받을 외화 금액 -->
                 <div class="calc-input-group">
-                    <label>바꿀 금액 (From)</label>
+                    <label id="calc-from-label">내가 받을 금액 (외화)</label>
                     <div class="calc-input-row">
                         <input type="number" id="calc-amount" value="1000" min="1" step="any" oninput="runExchangeCalc()">
                         <select id="calc-from-curr" onchange="runExchangeCalc()">
-                            <option value="USD" selected>USD (달러)</option>
+                            <option value="JPY" selected>JPY (엔화)</option>
+                            <option value="USD">USD (달러)</option>
                             <option value="EUR">EUR (유로)</option>
-                            <option value="JPY">JPY (엔화)</option>
                             <option value="KRW">KRW (원화)</option>
                         </select>
                     </div>
@@ -1147,9 +1157,9 @@
                 <!-- 통화 맞바꾸기 버튼 -->
                 <button class="calc-swap-btn" onclick="swapCurrencies()" title="통화 맞바꾸기">⇄</button>
 
-                <!-- 도착 통화 -->
+                <!-- 도착 통화: 은행에 지불할 금액 -->
                 <div class="calc-input-group">
-                    <label>받을 통화 (To)</label>
+                    <label id="calc-to-label">은행에 지불할 금액 (원화)</label>
                     <div class="calc-input-row">
                         <input type="text" id="calc-result-preview" readonly placeholder="자동 계산" style="color:var(--primary); font-weight:700;">
                         <select id="calc-to-curr" onchange="runExchangeCalc()">
@@ -1163,24 +1173,38 @@
             </div>
 
             <div class="calc-options-row">
-                <div class="calc-options-label">🎯 환전 수수료 우대율 선택:</div>
-                <select class="calc-options-select" id="calc-preferential" onchange="runExchangeCalc()">
-                    <option value="0.0">우대 없음 (0% - 공항/지점 기본)</option>
-                    <option value="0.5">50% 우대 (일반 모바일 환전)</option>
-                    <option value="0.8" selected>80% 우대 (주요 은행 우대 쿠폰)</option>
-                    <option value="0.9">90% 우대 (모바일 환전 최대 우대)</option>
-                    <option value="1.0">100% 우대 (매매기준율 수수료 무료)</option>
-                </select>
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <div class="calc-options-label">🎯 환전 수수료 우대율:</div>
+                    <select class="calc-options-select" id="calc-preferential" onchange="runExchangeCalc()">
+                        <option value="1.0" selected>⚡ 최신 환율 100% 적용 (매매기준율 · 수수료 0원)</option>
+                        <option value="0.9">90% 우대 (모바일 환전 최대 우대)</option>
+                        <option value="0.8">80% 우대 (주요 은행 우대 쿠폰)</option>
+                        <option value="0.5">50% 우대 (일반 모바일 환전)</option>
+                        <option value="0.0">우대 없음 (0% · 공항/영업점 현찰 스프레드 1.75% 차감)</option>
+                    </select>
+                </div>
+                <button type="button" class="btn" style="font-size:0.8rem; padding:6px 12px; background:var(--primary); color:white; border:none; border-radius:6px; cursor:pointer;" onclick="setLatestRateMode()">
+                    ⚡ 최신 환율로 즉시 계산
+                </button>
             </div>
 
             <!-- 계산 결과 상세 카드 -->
             <div class="calc-result-card" id="calc-result-card">
-                <div class="calc-result-main">
-                    <span class="calc-result-sub" id="calc-formula-text">1 USD 당 약 1,362.30 KRW 적용 (우대율 80%)</span>
-                    <span class="calc-result-amount" id="calc-final-amount">약 1,362,295 원</span>
-                </div>
-                <div>
-                    <span class="calc-saved-badge" id="calc-saved-badge">💰 약 19,139원 절약!</span>
+                <div class="calc-result-main" style="width:100%;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:4px;">
+                        <span class="calc-result-sub" id="calc-formula-text" style="font-weight:600;">최신 매매기준율 로딩 중...</span>
+                        <span id="calc-base-badge" style="font-size:0.78rem; background:rgba(37,99,235,0.12); color:var(--primary); padding:3px 8px; border-radius:12px; font-weight:700;">📌 기준환율: 실시간 동기화</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;">
+                        <span class="calc-result-amount" id="calc-final-amount">계산 중...</span>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap;" id="calc-badges-container">
+                            <span class="calc-saved-badge" id="calc-saved-badge" style="display:none;">💰 수수료 절약</span>
+                            <span id="calc-fee-info" style="display:none; font-size:0.8rem; color:#dc2626; font-weight:600; padding:4px 8px; background:rgba(220,38,38,0.1); border-radius:6px;"></span>
+                        </div>
+                    </div>
+                    <div id="calc-standard-row" style="font-size:0.82rem; color:var(--text-sub); margin-top:4px; display:none;">
+                        수수료 없는 최신 매매기준 환산액: <strong id="calc-standard-val">0</strong> (차감된 은행 수수료: <span id="calc-fee-val">0</span>)
+                    </div>
                 </div>
             </div>
         </div>
@@ -1519,15 +1543,66 @@
             runExchangeCalc();
         }
 
+        let currentTradeMode = 'buy'; // 기본 모드: 외화 살 때 (받을 외화 ➔ 지불할 원화)
+
+        function setTradeMode(mode) {
+            currentTradeMode = mode;
+            const btnBuy = document.getElementById('btn-mode-buy');
+            const btnSell = document.getElementById('btn-mode-sell');
+            const fromLabel = document.getElementById('calc-from-label');
+            const toLabel = document.getElementById('calc-to-label');
+
+            if (mode === 'buy') {
+                if (btnBuy) {
+                    btnBuy.style.background = 'var(--primary)';
+                    btnBuy.style.color = '#ffffff';
+                    btnBuy.style.borderColor = 'var(--primary)';
+                }
+                if (btnSell) {
+                    btnSell.style.background = 'var(--bg)';
+                    btnSell.style.color = 'var(--text-sub)';
+                    btnSell.style.borderColor = 'var(--border)';
+                }
+                if (fromLabel) fromLabel.innerText = '내가 받을 금액 (외화)';
+                if (toLabel) toLabel.innerText = '은행에 지불할 금액 (원화)';
+            } else {
+                if (btnSell) {
+                    btnSell.style.background = 'var(--primary)';
+                    btnSell.style.color = '#ffffff';
+                    btnSell.style.borderColor = 'var(--primary)';
+                }
+                if (btnBuy) {
+                    btnBuy.style.background = 'var(--bg)';
+                    btnBuy.style.color = 'var(--text-sub)';
+                    btnBuy.style.borderColor = 'var(--border)';
+                }
+                if (fromLabel) fromLabel.innerText = '내가 바꿀 금액 (외화)';
+                if (toLabel) toLabel.innerText = '은행에서 받을 금액 (원화)';
+            }
+            runExchangeCalc();
+        }
+
+        function setLatestRateMode() {
+            const prefSelect = document.getElementById('calc-preferential');
+            prefSelect.value = "1.0";
+            runExchangeCalc();
+        }
+
         async function runExchangeCalc() {
             const amountInput = document.getElementById('calc-amount');
             const fromCurr = document.getElementById('calc-from-curr').value;
             const toCurr = document.getElementById('calc-to-curr').value;
-            const prefRate = parseFloat(document.getElementById('calc-preferential').value) || 0.0;
+            const prefSelect = document.getElementById('calc-preferential');
+            const prefRate = parseFloat(prefSelect.value) !== undefined ? parseFloat(prefSelect.value) : 1.0;
             const previewInput = document.getElementById('calc-result-preview');
             const finalAmountSpan = document.getElementById('calc-final-amount');
             const formulaSpan = document.getElementById('calc-formula-text');
+            const baseBadge = document.getElementById('calc-base-badge');
             const savedBadge = document.getElementById('calc-saved-badge');
+            const feeInfo = document.getElementById('calc-fee-info');
+            const standardRow = document.getElementById('calc-standard-row');
+            const standardVal = document.getElementById('calc-standard-val');
+            const feeVal = document.getElementById('calc-fee-val');
 
             const amount = parseFloat(amountInput.value) || 0;
             if (amount <= 0) {
@@ -1537,23 +1612,66 @@
             }
 
             try {
-                const url = `${getBaseUrl()}/exchange/calculate?amount=${amount}&from_currency=${fromCurr}&to_currency=${toCurr}&preferential_rate=${prefRate}`;
+                const url = `${getBaseUrl()}/exchange/calculate?amount=${amount}&from_currency=${fromCurr}&to_currency=${toCurr}&preferential_rate=${prefRate}&trade_type=${currentTradeMode}`;
                 const res = await fetch(url);
                 if (res.ok) {
                     const data = await res.json();
                     const converted = data.converted_amount;
+                    const standardAmount = data.market_standard_amount || converted;
                     const unitStr = toCurr === 'KRW' ? '원' : (toCurr === 'USD' ? '$' : (toCurr === 'EUR' ? '€' : '¥'));
+                    const actionWord = currentTradeMode === 'buy' ? '지불할 금액' : '수령할 금액';
                     
                     previewInput.value = `${formatNum(converted)} ${toCurr}`;
-                    finalAmountSpan.innerText = `${formatNum(converted)} ${unitStr} (${toCurr})`;
+                    finalAmountSpan.innerText = `${formatNum(converted)} ${unitStr} (${actionWord})`;
                     formulaSpan.innerText = data.formula || `${data.rate_date} 환율 기준`;
-                    
-                    if (data.saved_amount > 0) {
-                        const savedUnit = toCurr === 'KRW' ? '원' : toCurr;
-                        savedBadge.style.display = 'inline-flex';
-                        savedBadge.innerText = `💰 우대 혜택으로 약 ${formatNum(data.saved_amount)} ${savedUnit} 절약!`;
+
+                    if (data.base_rate_display && baseBadge) {
+                        baseBadge.innerText = `📌 기준: ${data.base_rate_display}`;
+                    }
+
+                    // 100% 매매기준율(수수료 없음) 모드인지 확인
+                    if (prefRate >= 1.0) {
+                        if (standardRow) standardRow.style.display = 'none';
+                        if (feeInfo) feeInfo.style.display = 'none';
+                        if (savedBadge) {
+                            savedBadge.style.display = 'inline-flex';
+                            savedBadge.style.background = '#dbeafe';
+                            savedBadge.style.color = '#1d4ed8';
+                            savedBadge.style.borderColor = '#93c5fd';
+                            savedBadge.innerText = currentTradeMode === 'buy'
+                                ? `⚡ 최신 환율 100% 적용 (수수료 0원, 최저 지불)`
+                                : `⚡ 최신 환율 100% 적용 (수수료 0원, 최고 수령)`;
+                        }
                     } else {
-                        savedBadge.style.display = 'none';
+                        // 수수료가 발생한 경우
+                        const fee = data.fee_deducted || Math.max(0, Math.round(Math.abs(standardAmount - converted) * 100) / 100);
+                        if (fee > 0 && standardRow) {
+                            standardRow.style.display = 'block';
+                            standardVal.innerText = `${formatNum(standardAmount)} ${toCurr}`;
+                            feeVal.innerText = `${formatNum(fee)} ${toCurr}`;
+                            if (feeInfo) {
+                                feeInfo.style.display = 'inline-flex';
+                                feeInfo.innerText = currentTradeMode === 'buy'
+                                    ? `은행 수수료 +${formatNum(fee)} ${toCurr} 포함`
+                                    : `은행 수수료 -${formatNum(fee)} ${toCurr} 차감`;
+                            }
+                        } else {
+                            if (standardRow) standardRow.style.display = 'none';
+                            if (feeInfo) feeInfo.style.display = 'none';
+                        }
+
+                        if (data.saved_amount > 0 && savedBadge) {
+                            const savedUnit = toCurr === 'KRW' ? '원' : toCurr;
+                            savedBadge.style.display = 'inline-flex';
+                            savedBadge.style.background = '#dcfce7';
+                            savedBadge.style.color = '#166534';
+                            savedBadge.style.borderColor = '#86efac';
+                            savedBadge.innerText = currentTradeMode === 'buy'
+                                ? `💰 우대 혜택으로 약 ${formatNum(data.saved_amount)} ${savedUnit} 절약 지불!`
+                                : `💰 우대 혜택으로 약 ${formatNum(data.saved_amount)} ${savedUnit} 절약 수령!`;
+                        } else if (savedBadge) {
+                            savedBadge.style.display = 'none';
+                        }
                     }
                     return;
                 }
@@ -1565,16 +1683,22 @@
             if (latestSummaryData) {
                 let krwMap = {
                     KRW: 1.0,
-                    USD: (latestSummaryData.USD && latestSummaryData.USD['최신 환율']) || 1367.0,
-                    EUR: (latestSummaryData.EUR && latestSummaryData.EUR['최신 환율']) || 1520.0,
-                    JPY: ((latestSummaryData.JPY && latestSummaryData.JPY['최신 환율']) || 878.0) / 100.0
+                    USD: (latestSummaryData.USD && latestSummaryData.USD['최신 환율']) || 1361.88,
+                    EUR: (latestSummaryData.EUR && latestSummaryData.EUR['최신 환율']) || 1538.10,
+                    JPY: ((latestSummaryData.JPY && latestSummaryData.JPY['최신 환율']) || 858.60) / 100.0
                 };
-                const baseKrw = amount * krwMap[fromCurr];
-                const resAmount = baseKrw / krwMap[toCurr];
+                const spread = (prefRate >= 1.0) ? 0.0 : (0.0175 * (1.0 - prefRate));
+                let resAmount;
+                if (currentTradeMode === 'buy') {
+                    resAmount = (amount * krwMap[fromCurr] * (1.0 + spread)) / krwMap[toCurr];
+                } else {
+                    resAmount = (amount * krwMap[fromCurr] * (1.0 - spread)) / krwMap[toCurr];
+                }
+                const actionWord = currentTradeMode === 'buy' ? '지불할 금액' : '수령할 금액';
                 previewInput.value = `${formatNum(resAmount)} ${toCurr}`;
-                finalAmountSpan.innerText = `약 ${formatNum(resAmount)} ${toCurr}`;
+                finalAmountSpan.innerText = `${formatNum(resAmount)} ${toCurr} (${actionWord})`;
                 formulaSpan.innerText = `실시간 매매기준율 환산 결과`;
-                savedBadge.style.display = 'none';
+                if (savedBadge) savedBadge.style.display = 'none';
             }
         }
 
