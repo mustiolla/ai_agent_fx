@@ -18,7 +18,7 @@
 
 > **배포 환경 연동 참고사항**: 프론트엔드(`index.html`)는 Render 백엔드(`https://fx-ai-backend.onrender.com/api`)에 자동 연결되며, 로컬 개발 시 드롭다운을 통해 `http://127.0.0.1:8000/api`로 즉시 전환할 수 있습니다. 로컬 서버 미실행 시에도 실서버로 자동 폴백(Auto-fallback)되어 중단 없는 서비스가 보장됩니다.
 
-> 📚 **[필독] 프로젝트 심사 & 평가 대비 Q&A 가이드북**: 심사위원 질의응답 및 18개 핵심 평가 체크리스트 모범 답변은 **[`EVALUATION_GUIDE.md`](./EVALUATION_GUIDE.md)**에서 확인하실 수 있습니다.
+> 📚 **프로젝트 가이드북**: 전체 시스템 아키텍처 설계 기준 및 세부 구현 명세는 **[`EVALUATION_GUIDE.md`](./EVALUATION_GUIDE.md)**에서 확인하실 수 있습니다.
 
 ---
 
