@@ -68,25 +68,19 @@
 
 ## 🚀 핵심 고도화 기능 6선
 
-```mermaid
-flowchart TD
-    subgraph G1 ["1 & 2. 데이터 분석 & 동기화 &nbsp;&nbsp;&nbsp;&nbsp;"]
-        F1["📊 1. 전일비 등락 뱃지 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>(어제 대비 등락폭 & 변동률) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-        F2["🔄 2. 실시간 환율 동기화 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>(Yahoo Finance 원클릭 수집) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    end
+<p align="center">
+  <img src="docs/features_architecture.svg" alt="핵심 고도화 기능 6선 아키텍처" width="100%" style="max-width: 760px;" />
+</p>
 
-    subgraph G2 ["3 & 4. AI 금융 지능 & 계산 &nbsp;&nbsp;&nbsp;&nbsp;"]
-        F3["💡 3. AI 데일리 브리핑 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>(외환 동향 진단 & 매매 팁) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-        F4["🧮 4. 스마트 환전 시뮬레이터 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>(우대율 반영 & 실시간 계산) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    end
+| 그룹 분류 | 순번 및 기능명 | 핵심 역할 및 사용자 가치 | 연계 엔드포인트 / 기술 스택 |
+| :--- | :--- | :--- | :--- |
+| **1 & 2. 데이터 분석 & 동기화** | **1. 📊 전일비 등락 뱃지** | 어제 종가 대비 변동폭(원) & 등락률(%) 실시간 모멘텀 표기 (`▲` 빨강 / `▼` 파랑 / `-` 회색) | `GET /api/data/summary` |
+| | **2. 🔄 실시간 환율 동기화** | Yahoo Finance 최근 1개월 환율 원클릭 수집 & 중복 없는 Firestore 증분(Incremental) 적재 | `POST /api/data/sync` |
+| **3 & 4. AI 금융 지능 & 계산** | **3. 💡 AI 데일리 브리핑** | Claude AI가 외환 동향을 분석하여 매일 아침 투자·환전 팁 리포트 생성 (1시간 캐싱) | `GET /api/market/briefing` |
+| | **4. 🧮 스마트 환전 시뮬레이터** | 실시간 매매기준율 연동, 양방향(외화 살 때 ⇄ 팔 때) 수수료 우대율 계산 & AI 자율 도구 호출 | `POST /api/calculator` |
+| **5 & 6. 사용자 경험 & 데이터 활용** | **5. 🗂️ 대화 기록 사이드바** | ChatGPT 스타일의 슬라이딩 드로어, 과거 상담 세션 즉시 복원 및 내역 관리 | `GET /api/conversations` |
+| | **6. 📥 엑셀 CSV / JSON 다운로드** | 한글 깨짐 없는 `UTF-8 with BOM` 엑셀 파일 저장 및 개발자용 RESTful JSON 내보내기 | `GET /api/data/export/csv` |
 
-    subgraph G3 ["5 & 6. 사용자 경험 & 데이터 활용 &nbsp;&nbsp;&nbsp;&nbsp;"]
-        F5["🗂️ 5. 대화 기록 사이드바 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>(과거 상담 복원 & 세션 관리) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-        F6["📥 6. 엑셀 CSV 다운로드 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>(UTF-8 BOM 무결성 파일) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
-    end
-
-    G1 --> G2 --> G3
-```
 
 ### 1. 📊 전일 대비 등락폭 & 변동률 뱃지 (실시간 모멘텀)
 - 외환 시장의 핵심 지표인 **"어제보다 올랐는가, 내렸는가?"**를 통화 카드 상단에 직관적으로 제공
