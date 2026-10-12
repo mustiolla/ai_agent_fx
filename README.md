@@ -9,13 +9,14 @@
 본 서비스는 클라우드 환경에 프론트엔드와 백엔드가 각각 완전 분리 배포되어 실시간 서비스 중입니다.
 
 | 구분 | 호스팅 / 플랫폼 | 배포 URL | 설명 |
-| :--- | :---: | :--- | :--- |
-| **Frontend Web App** | GitHub Pages | **[https://mustiolla.github.io/ai_agent_fx/](https://mustiolla.github.io/ai_agent_fx/)** | 브라우저에서 즉시 실행 가능한 반응형 웹 인터페이스 |
+| :--- | :--- :--- | :--- | :--- |
+| **Frontend Web App (Vercel)** | Vercel | **[https://ai-agent-fx.vercel.app/](https://ai-agent-fx.vercel.app/)** | Vercel 글로벌 엣지 네트워크 배포 웹 인터페이스 |
+| **Frontend Web App (GitHub)** | GitHub Pages | **[https://mustiolla.github.io/ai_agent_fx/](https://mustiolla.github.io/ai_agent_fx/)** | GitHub Pages 반응형 웹 인터페이스 |
 | **Backend API Server** | Render (Web Service) | **[https://fx-ai-backend.onrender.com](https://fx-ai-backend.onrender.com)** | FastAPI 비동기 RESTful API 및 캐시/AI 엔진 |
 | **Interactive API Docs** | Swagger UI | **[https://fx-ai-backend.onrender.com/docs](https://fx-ai-backend.onrender.com/docs)** | 대화형 API 테스트 및 Pydantic 스키마 명세 |
 | **Source Code Repository**| GitHub | **[https://github.com/mustiolla/ai_agent_fx](https://github.com/mustiolla/ai_agent_fx)** | 전체 소스코드 및 형상관리 저장소 |
 
-> **배포 환경 연동 참고사항**: 프론트엔드(`index.html`)는 기본 API 서버로 Render 백엔드(`https://fx-ai-backend.onrender.com/api`)에 자동 연결되도록 구성되어 있으며, 로컬 개발 시 드롭다운을 통해 `http://127.0.0.1:8000/api`로 즉시 전환할 수 있습니다.
+> **배포 환경 연동 참고사항**: 프론트엔드(`index.html`)는 Render 백엔드(`https://fx-ai-backend.onrender.com/api`)에 자동 연결되며, 로컬 개발 시 드롭다운을 통해 `http://127.0.0.1:8000/api`로 즉시 전환할 수 있습니다. 로컬 서버 미실행 시에도 실서버로 자동 폴백(Auto-fallback)되어 중단 없는 서비스가 보장됩니다.
 
 ---
 
@@ -55,13 +56,13 @@
 
 | UI 영역 | 컴포넌트 명칭 | 주요 기능 및 시각적 구성 요소 |
 | :--- | :--- | :--- |
-| **상단 헤더 바** | 글로벌 컨트롤러 | • 다크 모드(`🌓`) 전환<br>• 최신 환율 원클릭 동기화(`🔄`)<br>• 엑셀 CSV / REST JSON 내보내기<br>• 지난 대화 기록(`💬`) 드로어 토글 |
+| **상단 헤더 바** | 글로벌 컨트롤러 | • **`[🤖 AI 비서 상담]` 즉시 스크롤 점프 & 포커스 퀵 버튼**<br>• 다크 모드(`🌓`) 전환<br>• 최신 환율 원클릭 동기화(`🔄`)<br>• 엑셀 CSV / REST JSON 내보내기<br>• 지난 대화 기록(`💬`) 드로어 토글 |
 | **안내 배너** | 콜드스타트 & 캐시 상태 | • Render 무료 인스턴스 초기 지연(20~30초) 안내<br>• `🟢 In-Memory 캐시 활성 (TTL 5분)` 실시간 뱃지 |
-| **모닝 브리핑** | AI 데일리 마켓 리포트 | • Claude AI가 분석한 오늘의 외환 시장 총평<br>• 3대 통화별 전일비 등락 진단 및 실전 환전·투자 매매 팁 (1시간 캐싱) |
+| **모닝 브리핑** | AI 데일리 마켓 리포트 | • Claude AI가 분석한 오늘의 외환 시장 총평<br>• 3대 통화별 전일비 등락 진단 및 실전 환전·투자 매매 팁 (1시간 캐싱)<br>• **`[👉 AI 비서에게 브리핑 질문하기]` 원클릭 퀵 링크** |
 | **통화 카드 그리드** | 3대 통화 핵심 요약 카드 | • 최신 공시 환율 및 기준일자<br>• **실시간 모멘텀 뱃지** (상승 `▲ 빨강`, 하락 `▼ 파랑`, 보합 `- 회색`)<br>• 기간별(7일/30일/90일/전체) 평균, 최저, 최고, 표준편차 지표 |
 | **인터랙티브 차트** | Chart.js 멀티 라인 그래프 | • USD, EUR, JPY 시계열 추세 비교 곡선<br>• 기간 탭(7일, 1개월, 3개월, 전체) 및 통화별 범례 On/Off 토글 |
 | **환전 시뮬레이터** | 스마트 외환 계산기 | • **양방향 거래 모드**: `💵 외화 살 때 (지불할 금액)` ⇄ `💴 외화 팔 때 (받을 금액)`<br>• 수수료 우대율 선택 (`0%` ~ `100%`)<br>• `⚡ 최신 환율로 즉시 계산` 퀵 버튼 및 수수료 절감액 실시간 산출 |
-| **AI 상담 챗봇** | Claude 금융 에이전트 | • 3대 도구 호출(Function Calling) 결합 자율 답변<br>• 빠른 질문 추천 칩 및 실시간 마크다운 표 렌더링 |
+| **AI 상담 챗봇** | Claude 금융 에이전트 | • **화면 우측 하단 상시 노출 플로팅 상담 버튼 (Floating Action Button)**<br>• 3대 도구 호출(Function Calling) 결합 자율 답변<br>• 빠른 질문 추천 칩 및 실시간 마크다운 표 렌더링 |
 
 ---
 
@@ -69,19 +70,19 @@
 
 ```mermaid
 flowchart TD
-    subgraph G1 ["1 & 2. 데이터 분석 & 동기화"]
-        F1["📊 1. 전일비 등락 뱃지<br>(▲ +5.20원 / +0.38%)"]
-        F2["🔄 2. 실시간 환율 동기화<br>(Yahoo Finance 원클릭)"]
+    subgraph G1 ["1 & 2. 데이터 분석 & 동기화 &nbsp;&nbsp;&nbsp;&nbsp;"]
+        F1["📊 1. 전일비 등락 뱃지 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>(어제 대비 등락폭 & 변동률) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+        F2["🔄 2. 실시간 환율 동기화 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>(Yahoo Finance 원클릭 수집) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
     end
 
-    subgraph G2 ["3 & 4. AI 금융 지능 & 계산"]
-        F3["💡 3. AI 데일리 브리핑<br>(시장 동향 & 매매 팁)"]
-        F4["🧮 4. 스마트 환전 시뮬레이터<br>(우대율 반영 & AI 툴 호출)"]
+    subgraph G2 ["3 & 4. AI 금융 지능 & 계산 &nbsp;&nbsp;&nbsp;&nbsp;"]
+        F3["💡 3. AI 데일리 브리핑 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>(외환 동향 진단 & 매매 팁) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+        F4["🧮 4. 스마트 환전 시뮬레이터 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>(우대율 반영 & 실시간 계산) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
     end
 
-    subgraph G3 ["5 & 6. 사용자 경험 & 데이터 활용"]
-        F5["🗂️ 5. 대화 기록 사이드바<br>(히스토리 복원 & 삭제)"]
-        F6["📥 6. 엑셀 CSV 다운로드<br>(UTF-8 BOM 무결성)"]
+    subgraph G3 ["5 & 6. 사용자 경험 & 데이터 활용 &nbsp;&nbsp;&nbsp;&nbsp;"]
+        F5["🗂️ 5. 대화 기록 사이드바 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>(과거 상담 복원 & 세션 관리) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+        F6["📥 6. 엑셀 CSV 다운로드 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>(UTF-8 BOM 무결성 파일) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
     end
 
     G1 --> G2 --> G3

@@ -248,6 +248,16 @@ def read_root():
     }
 
 
+@app.get("/api/health")
+def api_health():
+    return {
+        "status": "online",
+        "service": "fx_assistant",
+        "version": "2.4.0",
+        "timestamp": time.time()
+    }
+
+
 # 5. 데이터 목록 조회 API (GET /api/data)
 @app.get("/api/data")
 def get_data(currency: Optional[str] = None):

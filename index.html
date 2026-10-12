@@ -147,6 +147,24 @@
             100% { transform: rotate(360deg); }
         }
 
+        .btn-ai-quick {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+            color: #ffffff !important;
+            border-color: #1d4ed8 !important;
+            font-weight: 700 !important;
+            box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+        }
+        .btn-ai-quick:hover {
+            background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.4);
+            transform: translateY(-1px);
+        }
+        body.dark-theme .btn-ai-quick {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+            border-color: #3b82f6 !important;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+        }
+
         .server-select {
             padding: 7px 10px;
             border-radius: 8px;
@@ -679,26 +697,62 @@
         .chat-box {
             background: var(--card-bg);
             padding: 22px;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border-radius: 14px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
             border: 1px solid var(--border);
+            border-top: 4px solid var(--primary);
             display: flex;
             flex-direction: column;
-            height: 580px;
+            height: 600px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .chat-box.highlight-focus {
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.45), 0 8px 30px rgba(37, 99, 235, 0.25);
+            border-color: var(--primary);
+            transform: scale(1.008);
         }
         .chat-box-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 14px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .chat-box-title-area {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
         }
         .chat-box-title {
             margin: 0;
-            font-size: 1.15rem;
+            font-size: 1.18rem;
             color: var(--text-main);
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+        }
+        .chat-box-desc {
+            font-size: 0.8rem;
+            color: var(--text-sub);
+        }
+        .chat-agent-badge {
+            background: rgba(34, 197, 94, 0.12);
+            color: #16a34a;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        body.dark-theme .chat-agent-badge {
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+            border-color: #16a34a;
         }
         .chat-history {
             flex: 1;
@@ -1008,6 +1062,49 @@
             opacity: 1;
             transform: translateY(0);
         }
+
+        /* 화면 우측 하단 고정 플로팅 AI 비서 바로가기 버튼 */
+        .floating-ai-btn {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: #ffffff;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 30px;
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.92rem;
+            font-weight: 700;
+            z-index: 990;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .floating-ai-btn:hover {
+            transform: translateY(-3px) scale(1.04);
+            box-shadow: 0 10px 25px rgba(37, 99, 235, 0.6);
+            background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+        }
+        body.dark-theme .floating-ai-btn {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.45);
+        }
+        .online-dot {
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 6px #22c55e;
+            animation: pulse-dot 1.8s infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
     </style>
 </head>
 <body>
@@ -1032,6 +1129,13 @@
     <!-- 토스트 알림 메시지 -->
     <div class="toast" id="toast"></div>
 
+    <!-- 우측 하단 상시 노출 플로팅 AI 비서 상담 버튼 -->
+    <button class="floating-ai-btn" onclick="scrollToChat()" title="화면 하단의 외환 AI 비서에게 즉시 질문하기">
+        <span>💬</span>
+        <span>AI 비서 상담</span>
+        <span class="online-dot" title="Claude 3.5 Sonnet 연동 온라인"></span>
+    </button>
+
     <div class="container">
         <!-- 1. 헤더 (다크 모드 토글 & 멀티 컨트롤) -->
         <div class="header">
@@ -1039,6 +1143,10 @@
                 <h1>💱 외환(FX) 분석 AI 비서</h1>
             </div>
             <div class="header-actions">
+                <!-- AI 비서 즉시 스크롤 점프 퀵 버튼 -->
+                <button class="btn btn-ai-quick" onclick="scrollToChat()" title="화면 하단의 AI 금융 에이전트 대화창으로 즉시 이동">
+                    <span>🤖</span> <span>AI 비서 상담</span>
+                </button>
                 <button class="btn btn-theme-toggle" id="theme-btn" onclick="toggleDarkMode()" title="다크/라이트 모드 전환 (보너스 과제)">
                     <span id="theme-icon">🌙</span> <span id="theme-text">다크 모드</span>
                 </button>
@@ -1089,6 +1197,11 @@
             </div>
             <div class="briefing-content" id="briefing-content">
                 오늘의 외환 시장 동향과 투자 및 환전 팁을 분석하는 중입니다...
+            </div>
+            <div style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed rgba(2, 132, 199, 0.25); display: flex; justify-content: flex-end; align-items: center;">
+                <button type="button" class="btn" style="font-size:0.82rem; padding: 5px 12px; background: rgba(2, 132, 199, 0.12); color: #0284c7; border: 1px solid #bae6fd; font-weight: 700; border-radius: 6px;" onclick="scrollToChat('오늘의 브리핑 내용을 바탕으로 향후 1주일간 엔화와 달러 환전 전략을 심층 분석해줘')">
+                    🤖 AI 비서에게 이 브리핑에 대해 질문하기 ➔
+                </button>
             </div>
         </div>
 
@@ -1221,12 +1334,21 @@
             </div>
         </div>
 
-        <!-- 6. AI 채팅 영역 -->
-        <div class="chat-box">
+        <!-- 6. AI 채팅 영역 (id="agent-chat-section") -->
+        <div class="chat-box" id="agent-chat-section">
             <div class="chat-box-header">
-                <h3 class="chat-box-title">💬 외환 전문 AI 채팅 비서</h3>
-                <button class="btn" style="font-size:0.8rem; padding: 5px 10px;" onclick="startNewConversation()">
-                    ➕ 새 대화
+                <div class="chat-box-title-area">
+                    <h3 class="chat-box-title">
+                        <span>🤖 외환 전문 AI 금융 비서</span>
+                        <span class="chat-agent-badge">
+                            <span class="online-dot" style="width:7px; height:7px;"></span>
+                            Claude 3.5 Sonnet 연동 온라인
+                        </span>
+                    </h3>
+                    <span class="chat-box-desc">환율 통계, 환전 시뮬레이션, 시장 동향을 자율 도구 호출(Function Calling)로 실시간 분석합니다.</span>
+                </div>
+                <button class="btn" style="font-size:0.8rem; padding: 5px 12px; background:var(--bg); font-weight:600;" onclick="startNewConversation()">
+                    ➕ 새 대화 시작
                 </button>
             </div>
 
@@ -1236,7 +1358,10 @@
 예: <strong>"최근 한달간의 엔화 환율 평균 알려줘"</strong>, <strong>"100만원 환전하면 엔화로 얼마야?"</strong>, <strong>"달러 변동성과 표준편차 분석해줘"</strong></div>
             </div>
 
-            <!-- 추천 질문 칩 -->
+            <!-- 추천 질문 칩 가이드 & 칩 목록 -->
+            <div style="font-size:0.78rem; color:var(--text-sub); font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:4px;">
+                <span>💡 추천 퀵 질문 (클릭 시 즉시 분석):</span>
+            </div>
             <div class="quick-chips">
                 <div class="chip" onclick="askQuestion('최근 한달간의 엔화 환율 평균 알려줘')">💴 최근 한달 엔화 평균</div>
                 <div class="chip" onclick="askQuestion('1000달러를 원화로 환전하면 얼마야? 우대율 80%로 계산해줘')">💵 1000달러 원화 환전 계산</div>
@@ -1254,12 +1379,32 @@
     </div>
 
     <script>
-        // 서버 주소 결정
+        // 서버 주소 결정 (스마트 자동 감지)
         const serverSelect = document.getElementById('api-server');
-        if (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.protocol === 'file:') {
+        if (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') {
             serverSelect.value = "http://127.0.0.1:8000/api";
         } else {
+            // Vercel 배포 및 기타 호스팅 환경에서는 기본 Render 클라우드 실서버 사용
             serverSelect.value = "https://fx-ai-backend.onrender.com/api";
+        }
+
+        // AI 비서 대화창으로 부드럽게 스크롤 점프 및 포커스
+        function scrollToChat(presetQuestion = null) {
+            const chatSection = document.getElementById('agent-chat-section');
+            const chatInput = document.getElementById('chat-input');
+            if (chatSection) {
+                chatSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                chatSection.classList.add('highlight-focus');
+                setTimeout(() => {
+                    chatSection.classList.remove('highlight-focus');
+                }, 1600);
+            }
+            if (presetQuestion && chatInput) {
+                chatInput.value = presetQuestion;
+            }
+            if (chatInput) {
+                setTimeout(() => chatInput.focus(), 400);
+            }
         }
 
         let currentPeriod = '30d';
@@ -2157,10 +2302,25 @@
             }
         }
 
-        // 초기 실행
-        initTheme();
-        loadDashboard('30d');
-        fetchMarketBriefing();
+        // 초기 실행: 최적 서버 감지 후 대시보드 및 AI 에이전트 초기화
+        async function initApp() {
+            initTheme();
+            if (serverSelect.value.includes('127.0.0.1')) {
+                try {
+                    const ctrl = new AbortController();
+                    const tid = setTimeout(() => ctrl.abort(), 1000);
+                    const res = await fetch("http://127.0.0.1:8000/", { signal: ctrl.signal });
+                    clearTimeout(tid);
+                    if (!res.ok) throw new Error();
+                } catch (e) {
+                    console.log("로컬 서버 미실행 감지: 클라우드 실서버(Render)로 자동 폴백합니다.");
+                    serverSelect.value = "https://fx-ai-backend.onrender.com/api";
+                }
+            }
+            loadDashboard('30d');
+            fetchMarketBriefing();
+        }
+        initApp();
     </script>
 </body>
 </html>
