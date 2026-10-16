@@ -247,6 +247,10 @@
         .briefing-refresh:hover {
             background: rgba(2, 132, 199, 0.15);
         }
+        .briefing-refresh.spinning {
+            animation: spin 1s linear infinite;
+            pointer-events: none;
+        }
 
         /* 3. 환율 요약 박스 */
         .summary-box {
@@ -1666,13 +1670,17 @@
         async function fetchMarketBriefing(forceRefresh = false) {
             const contentDiv = document.getElementById('briefing-content');
             const dateSpan = document.getElementById('briefing-date');
+            const refreshBtn = document.querySelector('.briefing-refresh');
 
-            if (forceRefresh) {
-                contentDiv.innerHTML = '<span style="color:var(--primary);">🤖 최신 지표를 바탕으로 AI 애널리스트 브리핑을 갱신 중입니다...</span>';
+            if (refreshBtn) refreshBtn.classList.add('spinning');
+
+            if (forceRefresh || !contentDiv.innerHTML || contentDiv.innerHTML.includes('분석하는 중') || contentDiv.innerHTML.includes('분석 중입니다')) {
+                contentDiv.innerHTML = '<span style="color:var(--primary); font-weight: 500;">⏳ 최신 환율 지표를 바탕으로 AI 수석 애널리스트 브리핑을 분석·생성하고 있습니다 (약 10~15초 소요)...</span>';
             }
 
             try {
-                const res = await fetch(`${getBaseUrl()}/market/briefing`);
+                const url = forceRefresh ? `${getBaseUrl()}/market/briefing?force=true` : `${getBaseUrl()}/market/briefing`;
+                const res = await fetch(url);
                 if (res.ok) {
                     const data = await res.json();
                     if (data.briefing) {
@@ -1685,6 +1693,8 @@
             } catch (e) {
                 console.warn("브리핑 조회 실패:", e);
                 contentDiv.innerText = "외환 시장 지표를 분석 중입니다. 백엔드 연결 상태를 확인해 주세요.";
+            } finally {
+                if (refreshBtn) refreshBtn.classList.remove('spinning');
             }
         }
 

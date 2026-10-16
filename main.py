@@ -96,6 +96,8 @@ def invalidate_cache():
     _rates_cache["data"] = None
     _rates_cache["timestamp"] = 0.0
     _briefing_cache["text"] = None
+    _briefing_cache["date"] = None
+    _briefing_cache["timestamp"] = 0.0
 
 
 # ==============================================================================
@@ -665,12 +667,73 @@ def sync_latest_rates():
     }
 
 
+def generate_fallback_briefing(usd_info: dict, eur_info: dict, jpy_info: dict, date_str: Optional[str] = None) -> str:
+    """AI API 일시 지연 또는 장애 발생 시 제공되는 고품질 규칙 기반 외환 시장 데일리 브리핑"""
+    date_display = date_str or datetime.now().strftime("%Y-%m-%d")
+
+    def format_currency_desc(curr_name: str, code: str, info: dict) -> str:
+        latest = info.get("최신 환율", 0)
+        avg = info.get("평균 환율", 0)
+        diff = info.get("등락폭", 0)
+        rate = info.get("등락률", 0)
+        std = info.get("표준편차", 0)
+
+        diff_str = f"+{diff}원" if diff > 0 else f"{diff}원"
+        rate_str = f"+{rate}%" if rate > 0 else f"{rate}%"
+        direction = "상승" if diff > 0 else ("하락" if diff < 0 else "보합")
+
+        try:
+            latest_val = float(latest)
+            avg_val = float(avg)
+            if latest_val < avg_val:
+                level_desc = f"최근 7일 평균({avg_val:,.2f}원) 대비 저평가(하단 구간)"
+                tip = "해외 결제 및 여행 목적 환전 시 분할 매수에 유리한 구간입니다."
+            else:
+                level_desc = f"최근 7일 평균({avg_val:,.2f}원) 대비 상단 구간"
+                tip = "외화 매도(원화 환전)에 유리하며, 매수 시에는 단기 조정을 관망하는 것을 추천합니다."
+        except Exception:
+            level_desc = "평균 수준"
+            tip = "시장 변동성에 유의하며 분할 환전을 권장합니다."
+
+        return (
+            f"### {curr_name} ({code})\n"
+            f"- **등락 및 흐름**: 현재 **{latest}원**으로 전일 대비 **{diff_str} ({rate_str})** {direction} 흐름이며, {level_desc}에 위치합니다. (단기 표준편차: {std}원)\n"
+            f"- **환전 팁**: {tip}\n"
+        )
+
+    usd_section = format_currency_desc("💵 달러", "USD", usd_info)
+    eur_section = format_currency_desc("💶 유로", "EUR", eur_info)
+    jpy_section = format_currency_desc("💴 엔화 (100엔당)", "JPY", jpy_info)
+
+    return f"""# 📊 오늘의 외환 시장 데일리 브리핑
+**기준일: {date_display}**
+
+---
+
+## 🌐 시장 총평
+오늘 외환 시장은 주요국 경제 지표와 수급 동향에 따라 통화별 차별화된 움직임을 보이고 있습니다. 달러({usd_info.get('최신 환율', '-')}원), 유로({eur_info.get('최신 환율', '-')}원), 엔화({jpy_info.get('최신 환율', '-')}원)의 단기 변동성을 확인하시고 목적에 맞는 분할 환전 전략을 수립하세요.
+
+---
+
+{usd_section}
+---
+
+{eur_section}
+---
+
+{jpy_section}
+---
+
+> ℹ️ *AI 분석 연결 지연 시 실시간 통계 알고리즘에 의해 자동 생성된 리포트입니다. 우측 상단 새로고침(🔄)을 클릭해 실시간 AI 브리핑을 다시 요청할 수 있습니다.*
+"""
+
+
 # 14. AI 오늘의 외환 시장 한 줄 데일리 브리핑 (GET /api/market/briefing)
 @app.get("/api/market/briefing")
-def get_market_briefing():
-    """Claude AI를 통해 분석된 오늘의 외환 시장 핵심 동향과 환전 팁을 제공합니다 (1시간 캐시)."""
+def get_market_briefing(force: bool = False):
+    """Claude AI를 통해 분석된 오늘의 외환 시장 핵심 동향과 환전 팁을 제공합니다 (1시간 캐시, force=True 시 강제 갱신)."""
     now = time.time()
-    if _briefing_cache["text"] and (now - _briefing_cache["timestamp"]) < _briefing_cache["ttl"]:
+    if not force and _briefing_cache["text"] and (now - _briefing_cache["timestamp"]) < _briefing_cache["ttl"]:
         return {
             "status": "success",
             "briefing": _briefing_cache["text"],
@@ -694,19 +757,18 @@ def get_market_briefing():
     """
 
     prompt = f"""당신은 외환(FX) 시장 수석 애널리스트입니다.
-아래의 오늘 최신 환율 및 최근 7일간의 변동 지표를 바탕으로, 투자자와 해외 환전 이용자를 위한 '오늘의 외환 시장 데일리 모닝 브리핑'을 작성하세요.
+아래의 오늘 최신 환율 및 최근 7일간의 변동 지표를 바탕으로, 투자자와 해외 환전 이용자를 위한 '오늘의 외환 시장 데일리 모닝 브리핑'을 600~800자 내외로 명쾌하고 가독성 높게 작성하세요.
 
 [최신 외환 지표]
 {market_context}
 
 [작성 지침]
-1. 인사말이나 겉치레 없이 바로 '# 📊 오늘의 외환 시장 데일리 브리핑' 헤더로 시작하세요.
-2. 먼저 전체 외환 시장의 흐름과 기조를 1~2문장으로 명쾌하게 총평하세요.
-3. 달러(USD), 유로(EUR), 엔화(JPY) 3대 통화 각각에 대해:
-   - 전일비 등락 및 7일 평균 대비 현재 수준 분석 (1~2문장)
-   - 실전 환전/매수/매도 타이밍 팁 (1문장)
-   형태로 글머리 기호(Bulleted List)와 이모지를 활용해 가독성 높게 작성하세요.
-4. 긴 마크다운 표(Table)는 지양하고 깔끔한 리스트 형식으로 작성하여 문장이 중간에 끊기지 않고 끝까지 완성되도록 작성하세요.
+1. 인사말이나 불필요한 서론 없이 바로 '# 📊 오늘의 외환 시장 데일리 브리핑'으로 시작하세요.
+2. 🌐 **시장 총평**: 전체 외환 시장의 흐름과 원화 가치 방향성을 1~2문장으로 명쾌하게 총평하세요.
+3. 💵 **달러(USD)**, 💶 **유로(EUR)**, 💴 **엔화(JPY 100엔당)** 3대 통화 각각에 대해:
+   - **등락 및 흐름**: 전일비 등락 및 7일 평균 대비 현재 수준 (1~2문장)
+   - **환전 팁**: 실전 매수/매도/환전 타이밍 전략 (1문장)
+4. 간결한 글머리 기호(Bullet points) 형식으로 작성하여 문장이 도중에 끊기지 않고 완전한 문장으로 깔끔하게 마무리되도록 하세요.
 """
 
     api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -718,20 +780,41 @@ def get_market_briefing():
     }
     payload = {
         "model": "claude-sonnet-4",
-        "max_tokens": 1500,
+        "max_tokens": 1000,
         "messages": [{"role": "user", "content": prompt}],
     }
 
+    briefing_text = None
     try:
-        res = requests.post(url, headers=headers, json=payload, timeout=25)
-        res_data = res.json()
-        briefing_text = res_data["content"][0]["text"].strip()
+        res = requests.post(url, headers=headers, json=payload, timeout=50)
+        if res.status_code == 200:
+            res_data = res.json()
+            content_list = res_data.get("content", [])
+            if content_list and "text" in content_list[0]:
+                briefing_text = content_list[0]["text"].strip()
+                _briefing_cache["text"] = briefing_text
+                _briefing_cache["date"] = period_info.get("end_date")
+                _briefing_cache["timestamp"] = now
+                logger.info("AI 데일리 브리핑이 성공적으로 생성 및 캐시되었습니다.")
+            else:
+                logger.error(f"AI 브리핑 응답 포맷 오류: {res_data}")
+        else:
+            logger.error(f"AI 브리핑 API 호출 실패 (상태 코드 {res.status_code}): {res.text[:300]}")
     except Exception as e:
-        briefing_text = f"환율 시장 데이터를 분석 중입니다. (달러: {usd_info.get('최신 환율')}원, 엔화: {jpy_info.get('최신 환율')}원, 유로: {eur_info.get('최신 환율')}원)"
+        logger.error(f"AI 브리핑 생성 중 예외 발생: {e}")
 
-    _briefing_cache["text"] = briefing_text
-    _briefing_cache["date"] = period_info.get("end_date")
-    _briefing_cache["timestamp"] = now
+    # AI 호출 실패 시 폴백 처리
+    if not briefing_text:
+        if _briefing_cache["text"]:
+            logger.info("기존 캐시된 브리핑을 폴백으로 반환합니다.")
+            return {
+                "status": "success",
+                "briefing": _briefing_cache["text"],
+                "date": _briefing_cache["date"],
+                "cached": True,
+                "fallback": True
+            }
+        briefing_text = generate_fallback_briefing(usd_info, eur_info, jpy_info, period_info.get("end_date"))
 
     return {
         "status": "success",
