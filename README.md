@@ -9,12 +9,12 @@
 본 서비스는 클라우드 환경에 프론트엔드와 백엔드가 각각 완전 분리 배포되어 실시간 서비스 중입니다.
 
 | 구분 | 호스팅 / 플랫폼 | 배포 URL | 설명 |
-| :--- | :--- :--- | :--- | :--- |
+| :--- | :---: | :--- | :--- |
 | **Frontend Web App (Vercel)** | Vercel | **[https://ai-agent-fx.vercel.app/](https://ai-agent-fx.vercel.app/)** | Vercel 글로벌 엣지 네트워크 배포 웹 인터페이스 |
 | **Frontend Web App (GitHub)** | GitHub Pages | **[https://mustiolla.github.io/ai_agent_fx/](https://mustiolla.github.io/ai_agent_fx/)** | GitHub Pages 반응형 웹 인터페이스 |
 | **Backend API Server** | Render (Web Service) | **[https://fx-ai-backend.onrender.com](https://fx-ai-backend.onrender.com)** | FastAPI 비동기 RESTful API 및 캐시/AI 엔진 |
 | **Interactive API Docs** | Swagger UI | **[https://fx-ai-backend.onrender.com/docs](https://fx-ai-backend.onrender.com/docs)** | 대화형 API 테스트 및 Pydantic 스키마 명세 |
-| **Source Code Repository**| GitHub | **[https://github.com/mustiolla/ai_agent_fx](https://github.com/mustiolla/ai_agent_fx)** | 전체 소스코드 및 형상관리 저장소 |
+| **Source Code Repository** | GitHub | **[https://github.com/mustiolla/ai_agent_fx](https://github.com/mustiolla/ai_agent_fx)** | 전체 소스코드 및 형상관리 저장소 |
 
 > **배포 환경 연동 참고사항**: 프론트엔드(`index.html`)는 Render 백엔드(`https://fx-ai-backend.onrender.com/api`)에 자동 연결되며, 로컬 개발 시 드롭다운을 통해 `http://127.0.0.1:8000/api`로 즉시 전환할 수 있습니다. 로컬 서버 미실행 시에도 실서버로 자동 폴백(Auto-fallback)되어 중단 없는 서비스가 보장됩니다.
 
