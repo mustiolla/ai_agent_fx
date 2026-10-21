@@ -1288,6 +1288,13 @@
     "id": "NHoToEibm3rHfCLfx8Cc"
   },
   {
+    "value": 835.5,
+    "date": "2026-10-21",
+    "memo": "자동 동기화",
+    "currency": "JPY",
+    "id": "NYWoiiO92D3wmnEkVWho"
+  },
+  {
     "value": 1469.26,
     "memo": "초기 데이터",
     "date": "2026-04-21",
@@ -1363,6 +1370,13 @@
     "date": "2026-09-07",
     "currency": "EUR",
     "id": "PhoI0RvWOYGL14wbCaC1"
+  },
+  {
+    "value": 1485.9,
+    "date": "2026-10-21",
+    "memo": "자동 동기화",
+    "currency": "EUR",
+    "id": "Pshl4yc3UIKtbhBlIfzf"
   },
   {
     "value": 1384.86,
@@ -1531,6 +1545,13 @@
     "date": "2026-05-12",
     "currency": "JPY",
     "id": "SlEF1shXC0MwspMJNv9i"
+  },
+  {
+    "value": 1324.5,
+    "date": "2026-10-21",
+    "memo": "자동 동기화",
+    "currency": "USD",
+    "id": "T30HqptZdTP2uzTScktC"
   },
   {
     "value": 1738.51,
